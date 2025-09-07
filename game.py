@@ -1,0 +1,615 @@
+import arcade
+import random
+import math
+from assets.sprites import (
+    make_warrior_textures,
+    make_ground_texture,
+    make_platform_texture,
+    make_slime_textures,
+    make_bat_textures,
+    make_heart_texture,
+    make_chest_texture,
+    make_orc_textures,
+    make_cloud_texture,
+)
+
+# Configurações básicas
+SCREEN_WIDTH = 1920
+SCREEN_HEIGHT = 1080
+SCREEN_TITLE = "Rogue Platformer"
+
+PLAYER_MOVE_SPEED = 4.0
+PLAYER_JUMP_SPEED = 12.0
+GRAVITY = 0.6
+
+ENEMY_SPEED = 2.0
+ATTACK_DURATION = 0.36
+ATTACK_HIT_START = 0.12
+ATTACK_HIT_END = 0.28
+PLAYER_MAX_HP = 5
+PLAYER_INVULN = 1.0
+ENEMY_CONTACT_DAMAGE = 1
+
+
+class GameWindow(arcade.Window):
+    def __init__(self):
+        super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+        arcade.set_background_color((35, 40, 60))
+        # Fullscreen
+        self.set_fullscreen(True)
+
+        self.player_list = arcade.SpriteList()
+        self.wall_list = arcade.SpriteList(use_spatial_hash=True)
+        self.enemy_list = arcade.SpriteList()
+        self.pickup_list = arcade.SpriteList()
+        self.clouds = arcade.SpriteList()
+
+        self.player = arcade.Sprite()
+        self.physics_engine = None
+        self.score = 0
+        self.score_text = None
+        self.player_max_hp = PLAYER_MAX_HP
+        self.player_hp = self.player_max_hp
+        self.player_invuln = 0.0
+        self.player_damage = 1
+        self.game_over = False
+        self.input_name = ""
+        self.game_over_title = None
+        self.game_over_prompt = None
+
+        self.left_pressed = False
+        self.right_pressed = False
+        self.facing_right = True
+
+        self.anim_timer = 0.0
+        self.anim_index = 0
+        self.is_attacking = False
+        self.attack_time = 0.0
+        self.attack_sprite = arcade.SpriteSolidColor(60, 36, (255, 255, 255, 1))  # hitbox invisível
+        self.enemies_hit = set()
+
+        self.textures = make_warrior_textures()
+
+        self.setup()
+
+    def setup(self):
+        self.player_list = arcade.SpriteList()
+        self.wall_list = arcade.SpriteList(use_spatial_hash=True)
+        self.enemy_list = arcade.SpriteList()
+        self.pickup_list = arcade.SpriteList()
+        self.clouds = arcade.SpriteList()
+        self.score = 0
+        self.score_text = arcade.Text("Score: 0", 10, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
+        self.player_hp = self.player_max_hp
+        self.player_invuln = 0.0
+        self.player_damage = 1
+        self.game_over = False
+        self.input_name = ""
+        self.game_over_title = None
+        self.game_over_prompt = None
+
+        # Chão
+        ground_tex = make_ground_texture(SCREEN_WIDTH, 40)
+        ground = arcade.Sprite()
+        ground.texture = ground_tex
+        ground.center_x = SCREEN_WIDTH // 2
+        ground.center_y = 20
+        self.wall_list.append(ground)
+        self.ground_top = ground.top
+
+        # Nuvens no ceu (espalhadas uniformemente e mais altas)
+        num_cols = 8
+        margin_x = 140
+        x_step = (SCREEN_WIDTH - 2 * margin_x) / (num_cols - 1)
+        # linhas perto do topo da tela
+        y_rows = [SCREEN_HEIGHT - 200, SCREEN_HEIGHT - 160, SCREEN_HEIGHT - 240, SCREEN_HEIGHT - 120]
+        for i in range(num_cols):
+            w = random.randint(120, 240)
+            h = random.randint(50, 90)
+            cloud = arcade.Sprite()
+            cloud.texture = make_cloud_texture(w, h, alpha=random.randint(190, 235))
+            # Distribui uniformemente no eixo X e alterna linhas de Y
+            jitter = random.randint(-30, 30)
+            cloud.center_x = int(margin_x + i * x_step + jitter)
+            cloud.center_y = y_rows[i % len(y_rows)] + random.randint(-15, 15)
+            self.clouds.append(cloud)
+
+        # Plataforma simples
+        plat_tex = make_platform_texture(220, 20)
+        plat = arcade.Sprite()
+        plat.texture = plat_tex
+        # Centraliza a plataforma baixa
+        plat.center_x = SCREEN_WIDTH // 2
+        plat.center_y = 150
+        self.wall_list.append(plat)
+
+        # Escadas de plataformas (altura de pulo ~120px)
+        # Centralizadas em relação ao centro da tela. Distâncias pequenas para permitir pulos entre as superiores.
+        stair_tex_w = 180
+        stair_tex = make_platform_texture(stair_tex_w, 20)
+        max_jump_px = int((PLAYER_JUMP_SPEED ** 2) / (2 * GRAVITY))
+        step_h = int(max_jump_px * 0.78)
+        center_x = SCREEN_WIDTH // 2
+        dxs = [180, 170]  # níveis 2 e 3 (superiores mais próximos para salto)
+        stairs_left = [(center_x - dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
+        stairs_right = [(center_x + dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
+        for x, y in stairs_left + stairs_right:
+            p = arcade.Sprite()
+            p.texture = stair_tex
+            p.center_x = x
+            p.center_y = y
+            self.wall_list.append(p)
+            # Inimigo que anda sobre a plataforma (orc)
+            patrol_min = x - (stair_tex_w // 2 - 10)
+            patrol_max = x + (stair_tex_w // 2 - 10)
+            self.spawn_orc(x=x, y=p.top, min_x=patrol_min, max_x=patrol_max)
+
+        # Plataformas extras para popular e espaçar mais a tela
+        dx_base = 160
+        extra_levels = [
+            [-3 * dx_base, -1 * dx_base, 1 * dx_base, 3 * dx_base],
+            [-2 * dx_base, 0, 2 * dx_base],
+        ]
+        for i, row in enumerate(extra_levels):
+            y = ground.top + step_h * (i + 1)
+            for dx in row:
+                ex = center_x + dx
+                ep = arcade.Sprite()
+                ep.texture = stair_tex
+                ep.center_x = ex
+                ep.center_y = y
+                self.wall_list.append(ep)
+                patrol_min = ex - (stair_tex_w // 2 - 10)
+                patrol_max = ex + (stair_tex_w // 2 - 10)
+                self.spawn_orc(x=ex, y=ep.top, min_x=patrol_min, max_x=patrol_max)
+
+        # Baú do machado melhor na plataforma mais alta (direita)
+        top_y = max(y for _, y in stairs_left + stairs_right)
+        center_top = arcade.Sprite()
+        center_top.texture = stair_tex
+        center_top.center_x = SCREEN_WIDTH // 2
+        center_top.center_y = top_y + step_h
+        self.wall_list.append(center_top)
+        self.spawn_chest(center_top.center_x, center_top.center_y + 18)
+
+        # Jogador
+        self.player = arcade.Sprite()
+        self.player.center_x = 100
+        self.player.center_y = ground.top + 30
+        self.player.scale = 1.0
+        # textura inicial
+        self.player.texture = self.textures["idle_right"][0]
+        self.player_list.append(self.player)
+
+        # Física do jogador
+        self.physics_engine = arcade.PhysicsEnginePlatformer(self.player, self.wall_list, gravity_constant=GRAVITY)
+
+        # Inimigos
+        # Slimes apenas no solo
+        self.spawn_slime(x=400, y=ground.top, min_x=360, max_x=740)
+        self.spawn_slime(x=900, y=ground.top, min_x=780, max_x=1150)
+        self.spawn_slime(x=1400, y=ground.top, min_x=1260, max_x=1680)
+        # Morcegos voadores
+        self.spawn_bat(x=300, y=400, min_x=150, max_x=600)
+        self.spawn_bat(x=900, y=520, min_x=780, max_x=1200)
+        self.spawn_bat(x=1400, y=460, min_x=1200, max_x=1700)
+
+    def spawn_slime(self, x: float, y: float, min_x: float, max_x: float):
+        enemy = arcade.Sprite()
+        enemy_tex = make_slime_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["walk_right"][0]
+        enemy.center_x = x
+        enemy.bottom = y
+        enemy.change_x = ENEMY_SPEED
+        enemy.bound_left = min_x
+        enemy.bound_right = max_x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = True
+        enemy.type = "slime"
+        # Vida/combate
+        enemy.max_hp = 3
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        self.enemy_list.append(enemy)
+
+    def spawn_bat(self, x: float, y: float, min_x: float, max_x: float):
+        enemy = arcade.Sprite()
+        enemy_tex = make_bat_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["fly_right"][0]
+        enemy.center_x = x
+        enemy.center_y = y
+        enemy.start_y = y
+        enemy.change_x = ENEMY_SPEED + 1.0
+        enemy.bound_left = min_x
+        enemy.bound_right = max_x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = True
+        enemy.type = "bat"
+        # Vida/combate
+        enemy.max_hp = 2
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        enemy.wave_t = 0.0
+        enemy.diving = False
+        enemy.dive_timer = 0.0
+        enemy.dive_cooldown = 0.0
+        self.enemy_list.append(enemy)
+
+    def spawn_goblin(self, x: float, y: float, min_x: float, max_x: float):
+        enemy = arcade.Sprite()
+        enemy_tex = make_goblin_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["walk_right"][0]
+        enemy.center_x = x
+        enemy.bottom = y
+        enemy.change_x = ENEMY_SPEED + 0.5
+        enemy.bound_left = min_x
+        enemy.bound_right = max_x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = True
+        enemy.type = "goblin"
+        enemy.max_hp = 3
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        self.enemy_list.append(enemy)
+
+    def spawn_orc(self, x: float, y: float, min_x: float, max_x: float):
+        enemy = arcade.Sprite()
+        enemy_tex = make_orc_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["walk_right"][0]
+        enemy.center_x = x
+        enemy.bottom = y
+        enemy.change_x = ENEMY_SPEED + 0.6
+        enemy.bound_left = min_x
+        enemy.bound_right = max_x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = True
+        enemy.type = "orc"
+        enemy.max_hp = 4
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        self.enemy_list.append(enemy)
+
+    def on_draw(self):
+        self.clear()
+
+        # Céu simples
+        arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 260, SCREEN_HEIGHT, (50, 70, 110))
+        arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, 260, (60, 90, 70))
+        self.clouds.draw()
+
+        self.wall_list.draw()
+        self.enemy_list.draw()
+        self.pickup_list.draw()
+        # Barras de vida dos slimes
+        for e in self.enemy_list:
+            if getattr(e, 'max_hp', None):
+                w = 28
+                ratio = max(0.0, min(1.0, e.hp / e.max_hp))
+                x0 = e.center_x - w / 2
+                y0 = e.top + 6
+                arcade.draw_lrbt_rectangle_filled(x0, x0 + w, y0, y0 + 4, (40, 40, 40))
+                arcade.draw_lrbt_rectangle_filled(x0, x0 + w * ratio, y0, y0 + 4, (80, 220, 100))
+        self.player_list.draw()
+
+        # Vida do jogador (corações simples)
+        heart_w, heart_h = 18, 12
+        for i in range(self.player_max_hp):
+            x0 = 10 + i * (heart_w + 6)
+            y0 = SCREEN_HEIGHT - 60
+            color = (220, 60, 80) if i < self.player_hp else (80, 70, 70)
+            arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w, y0, y0 + heart_h, color)
+
+        self.score_text.text = f"Score: {self.score}"
+        self.score_text.draw()
+
+        # Tela de Game Over
+        if self.game_over:
+            if self.game_over_title is None:
+                self.game_over_title = arcade.Text(
+                    "GAME OVER",
+                    SCREEN_WIDTH // 2 - 140,
+                    SCREEN_HEIGHT // 2 + 80,
+                    arcade.color.WHITE,
+                    32,
+                )
+                self.game_over_prompt = arcade.Text(
+                    "Digite seu nome e pressione Enter:",
+                    SCREEN_WIDTH // 2 - 260,
+                    SCREEN_HEIGHT // 2 + 30,
+                    arcade.color.ANTIQUE_WHITE,
+                    20,
+                )
+                self.game_over_name = arcade.Text(
+                    self.input_name,
+                    SCREEN_WIDTH // 2 - 260,
+                    SCREEN_HEIGHT // 2 - 10,
+                    arcade.color.YELLOW,
+                    20,
+                )
+                self.final_score_text = arcade.Text(
+                    f"Score: {self.score}",
+                    SCREEN_WIDTH // 2 - 260,
+                    SCREEN_HEIGHT // 2 - 50,
+                    arcade.color.LIGHT_GREEN,
+                    20,
+                )
+            # Fundo translúcido
+            arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (0, 0, 0, 150))
+            self.game_over_title.draw()
+            self.game_over_prompt.draw()
+            self.game_over_name.text = self.input_name + "_"
+            self.game_over_name.draw()
+            self.final_score_text.text = f"Score: {self.score}"
+            self.final_score_text.draw()
+
+    def on_update(self, delta_time: float):
+        # Movimento por teclas
+        self.player.change_x = 0
+        if self.left_pressed and not self.right_pressed:
+            self.player.change_x = -PLAYER_MOVE_SPEED
+            self.facing_right = False
+        elif self.right_pressed and not self.left_pressed:
+            self.player.change_x = PLAYER_MOVE_SPEED
+            self.facing_right = True
+
+        # Física do jogador
+        self.physics_engine.update()
+
+        # Impede o jogador de sair pela esquerda/direita da tela
+        if self.player.left < 0:
+            self.player.left = 0
+            if self.player.change_x < 0:
+                self.player.change_x = 0
+        if self.player.right > SCREEN_WIDTH:
+            self.player.right = SCREEN_WIDTH
+            if self.player.change_x > 0:
+                self.player.change_x = 0
+
+        if self.game_over:
+            return
+
+        # Atualiza inimigos (movimento ping-pong/voo + animação + vida)
+        for e in list(self.enemy_list):
+            # Mortos: tocar animação e remover
+            if e.dead:
+                e.death_timer += delta_time
+                if e.death_timer > 0.45:
+                    if not e.scored:
+                        self.score += 100
+                        e.scored = True
+                        # Drop de coração 30%
+                        if random.random() < 0.3:
+                            self.spawn_heart(e.center_x, e.center_y + 18)
+                    e.remove_from_sprite_lists()
+                    continue
+                # anim de morte
+                e.facing_right = e.change_x >= 0
+                idx = min(int(e.death_timer / 0.15), 2)
+                key = "die_right" if e.facing_right else "die_left"
+                e.texture = e.enemy_tex[key][idx]
+                continue
+
+            # Vivo: movimento
+            e.center_x += e.change_x
+            if e.type == "bat":
+                # Dive logic
+                if e.diving:
+                    e.dive_timer += delta_time
+                    # Direção para o jogador
+                    dir_x = 1 if self.player.center_x > e.center_x else -1
+                    e.change_x = (ENEMY_SPEED + 1.2) * dir_x
+                    # Desce mais lentamente até a altura do jogador
+                    if e.center_y > self.player.center_y + 8:
+                        e.center_y -= 4
+                    else:
+                        e.center_y += 1  # overshoot leve
+                    # Termina dive após tempo ou se passou do jogador
+                    if e.dive_timer > 1.2 or abs(e.center_y - self.player.center_y) < 10:
+                        e.diving = False
+                        e.dive_cooldown = 2.5
+                else:
+                    # Patrulha em onda
+                    e.wave_t += delta_time
+                    amp = 18
+                    # Volta suavemente ao y base
+                    base_y = e.start_y + amp * math.sin(e.wave_t * 6)
+                    e.center_y += (base_y - e.center_y) * 0.15
+                    # Checa se pode iniciar dive
+                    if e.dive_cooldown > 0:
+                        e.dive_cooldown -= delta_time
+                    else:
+                        # Só faz rasante se o jogador não estiver no chão
+                        player_on_ground = self.player.bottom <= self.ground_top + 6
+                        if (not player_on_ground) and abs(self.player.center_x - e.center_x) < 240 and e.center_y > self.player.center_y + 40:
+                            e.diving = True
+                            e.dive_timer = 0.0
+            if e.center_x < e.bound_left:
+                e.center_x = e.bound_left
+                e.change_x *= -1
+            if e.center_x > e.bound_right:
+                e.center_x = e.bound_right
+                e.change_x *= -1
+
+            e.facing_right = e.change_x >= 0
+            e.anim_timer += delta_time
+            if e.hurt_timer > 0:
+                e.hurt_timer -= delta_time
+                if e.anim_timer > 0.12:
+                    e.anim_timer = 0
+                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "orc") else 4)
+                if e.type in ("slime", "goblin", "orc"):
+                    key = "hurt_right" if e.facing_right else "hurt_left"
+                else:
+                    key = "fly_right" if e.facing_right else "fly_left"
+            else:
+                if e.anim_timer > 0.18:
+                    e.anim_timer = 0
+                    e.anim_index = (e.anim_index + 1) % 4
+                if e.type in ("slime", "goblin", "orc"):
+                    key = "walk_right" if e.facing_right else "walk_left"
+                else:  # bat
+                    key = "fly_right" if e.facing_right else "fly_left"
+            frames = e.enemy_tex[key]
+            e.texture = frames[e.anim_index % len(frames)]
+
+            # Dano de contato ao jogador
+            if not e.dead and self.player_invuln <= 0 and arcade.check_for_collision(self.player, e):
+                self.player_hp = max(0, self.player_hp - ENEMY_CONTACT_DAMAGE)
+                self.player_invuln = PLAYER_INVULN
+                # knockback
+                push = 14 if self.player.center_x < e.center_x else -14
+                self.player.center_x += push
+                if self.player_hp <= 0:
+                    self.game_over = True
+                    return
+
+        # Ataque simples com hitbox na direção do guerreiro
+        if self.is_attacking:
+            self.attack_time -= delta_time
+            progress = ATTACK_DURATION - self.attack_time
+            off_x = 26 if self.facing_right else -26
+            self.attack_sprite.center_x = self.player.center_x + off_x
+            self.attack_sprite.center_y = self.player.center_y + 8
+            active = ATTACK_HIT_START <= progress <= ATTACK_HIT_END
+            if self.attack_time <= 0:
+                self.is_attacking = False
+
+            if active:
+                hits = arcade.check_for_collision_with_list(self.attack_sprite, self.enemy_list)
+                for h in hits:
+                    if h in self.enemies_hit:
+                        continue
+                    self.enemies_hit.add(h)
+                    # dano/knockback
+                    h.hp -= self.player_damage
+                    if h.hp <= 0:
+                        h.dead = True
+                        h.death_timer = 0.0
+                    else:
+                        h.hurt_timer = 0.25
+                        h.center_x += 10 if self.facing_right else -10
+
+        # Decai invulnerabilidade do jogador
+        if self.player_invuln > 0:
+            self.player_invuln -= delta_time
+
+        # Animação
+        self.anim_timer += delta_time
+        if self.anim_timer > 0.12:
+            self.anim_timer = 0
+            self.anim_index += 1
+
+        state = "idle"
+        if self.is_attacking:
+            state = "attack"
+        elif abs(self.player.change_x) > 0.1:
+            state = "run"
+
+        key = f"{state}_{'right' if self.facing_right else 'left'}"
+        frames = self.textures[key]
+        if state == "attack":
+            # Seleciona frame pelo progresso do ataque
+            progress = (ATTACK_DURATION - self.attack_time) / ATTACK_DURATION
+            idx = min(int(progress * len(frames)), len(frames) - 1)
+        else:
+            idx = self.anim_index % len(frames)
+        self.player.texture = frames[idx]
+
+        # Coleta de pickups (corações)
+        for item in arcade.check_for_collision_with_list(self.player, self.pickup_list):
+            if hasattr(item, 'is_heart') and item.is_heart:
+                if self.player_hp < self.player_max_hp:
+                    self.player_hp += 1
+                item.remove_from_sprite_lists()
+            elif hasattr(item, 'is_chest') and item.is_chest:
+                self.player_damage = 2
+                item.remove_from_sprite_lists()
+
+    def on_key_press(self, key, modifiers):
+        if self.game_over:
+            if key == arcade.key.ENTER:
+                self.save_score(self.input_name.strip() or "Player", self.score)
+                self.setup()
+            elif key == arcade.key.BACKSPACE:
+                self.input_name = self.input_name[:-1]
+            elif key == arcade.key.ESCAPE:
+                self.close()
+            return
+
+        if key == arcade.key.LEFT:
+            self.left_pressed = True
+        elif key == arcade.key.RIGHT:
+            self.right_pressed = True
+        elif key == arcade.key.SPACE:
+            if self.physics_engine.can_jump():
+                self.player.change_y = PLAYER_JUMP_SPEED
+        elif key == arcade.key.Z or key == arcade.key.Q:
+            if not self.is_attacking:
+                self.is_attacking = True
+                self.attack_time = ATTACK_DURATION
+                self.enemies_hit = set()
+        elif key == arcade.key.ESCAPE:
+            self.close()
+
+    def on_key_release(self, key, modifiers):
+        if key == arcade.key.LEFT:
+            self.left_pressed = False
+        elif key == arcade.key.RIGHT:
+            self.right_pressed = False
+
+    def on_text(self, text: str):
+        if self.game_over:
+            if len(text) == 1 and text.isprintable() and len(self.input_name) < 16:
+                self.input_name += text
+
+    def spawn_heart(self, x: float, y: float):
+        heart = arcade.Sprite()
+        heart.texture = make_heart_texture(18, 16)
+        heart.center_x = x
+        heart.center_y = y
+        heart.is_heart = True
+        self.pickup_list.append(heart)
+
+    def spawn_chest(self, x: float, y: float):
+        chest = arcade.Sprite()
+        chest.texture = make_chest_texture(28, 22)
+        chest.center_x = x
+        chest.center_y = y
+        chest.is_chest = True
+        self.pickup_list.append(chest)
+
+    def save_score(self, name: str, score: int):
+        try:
+            with open("scores.txt", "a", encoding="utf-8") as f:
+                f.write(f"{name};{score}\n")
+        except Exception:
+            pass
+
+
+def main():
+    GameWindow()
+    arcade.run()
+
+
+if __name__ == "__main__":
+    main()
