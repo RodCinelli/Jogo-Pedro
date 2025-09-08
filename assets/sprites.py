@@ -8,22 +8,27 @@ def _outline(d: ImageDraw.ImageDraw, rect, color=(20, 20, 28, 255)):
     d.rectangle([x0, y0, x1, y1], outline=color)
 
 
+
 def make_warrior_textures():
-    """Warrior com espada, pixel-art simples com mais detalhes e animaÃ§Ãµes."""
+    """Gera o guerreiro com elmo de cavaleiro, armadura vermelha com detalhes amarelos
+    e espada a ~30 graus (semi-horizontal) pronta para ataque.
+    """
     w, h = 48, 64
-    armor = (72, 120, 220, 255)
-    armor_dark = (52, 90, 170, 255)
+    # Cores: vermelho/amarelo
+    armor = (200, 60, 60, 255)
+    armor_dark = (140, 30, 30, 255)
+    accent = (230, 200, 60, 255)
     skin = (234, 200, 170, 255)
     boot = (60, 40, 30, 255)
     sword_handle = (140, 90, 30, 255)
-    sword_guard = (180, 180, 190, 255)
-    sword_blade = (210, 210, 220, 255)
+    sword_guard = (230, 200, 80, 255)
+    sword_blade = (225, 230, 240, 255)
 
     def frame(leg_phase: int, arm_pose: str):
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
 
-        # Pernas e botas com passada alternada mais evidente
+        # Pernas/botas com passada visível
         left_forward = leg_phase in (0, 2)
         lx0, lx1 = 16, 22
         rx0, rx1 = 26, 32
@@ -38,43 +43,52 @@ def make_warrior_textures():
             d.rectangle([16 - 1, 12, 22 - 1, 18], fill=boot)
             d.rectangle([26 + 1, 12, 32 + 1, 18], fill=boot)
 
-        # Tronco/peitoral
+        # Tronco/peitoral com placas e detalhe amarelo
         d.rectangle([14, 28, 34, 46], fill=armor)
+        d.rectangle([14, 40, 34, 42], fill=armor_dark)
+        d.rectangle([14, 34, 34, 36], fill=armor_dark)
+        d.rectangle([14, 28, 34, 30], fill=accent)
         _outline(d, [14, 28, 34, 46])
         # Ombreiras
         d.rectangle([12, 44, 18, 50], fill=armor_dark)
         d.rectangle([30, 44, 36, 50], fill=armor_dark)
+        d.rectangle([12, 48, 18, 50], fill=accent)
+        d.rectangle([30, 48, 36, 50], fill=accent)
 
-        # CabeÃ§a/Elmo simples
+        # Elmo de cavaleiro (fechado com viseira)
+        d.rectangle([16, 56, 32, 62], fill=armor_dark)  # casco
+        # crista/amarela superior
+        d.rectangle([18, 62, 30, 64], fill=accent)
+        # rosto sob viseira
         d.rectangle([18, 46, 30, 58], fill=skin)
-        d.rectangle([16, 56, 32, 60], fill=armor_dark)
+        # viseira estreita + narizeira
+        d.rectangle([18, 52, 30, 54], fill=(20, 30, 50, 255))
+        d.rectangle([23, 54, 25, 58], fill=armor_dark)
         _outline(d, [18, 46, 30, 58])
 
-        # BraÃ§o e Espada
+        # Braço e Espada (~30 graus em relação à horizontal)
         if arm_pose == "down":
-            # punho
-            d.rectangle([32, 38, 34, 50], fill=sword_handle)
-            # guarda (cruzeta)
-            d.rectangle([33, 46, 38, 48], fill=sword_guard)
-            # lÃ¢mina apontando para baixo
-            d.rectangle([38, 44, 42, 60], fill=sword_blade)
+            d.rectangle([30, 44, 32, 50], fill=sword_handle)
+            d.rectangle([32, 46, 36, 48], fill=sword_guard)
+            # lâmina diagonal (aprox. 30°): paralelogramo
+            d.polygon([(36, 46), (52, 40), (54, 43), (38, 49)], fill=sword_blade)
         elif arm_pose == "mid":
-            d.rectangle([32, 44, 34, 56], fill=sword_handle)
-            d.rectangle([31, 54, 37, 56], fill=sword_guard)
-            d.rectangle([37, 54, 44, 60], fill=sword_blade)
+            d.rectangle([30, 42, 32, 48], fill=sword_handle)
+            d.rectangle([32, 44, 36, 46], fill=sword_guard)
+            d.polygon([(36, 44), (52, 38), (54, 41), (38, 47)], fill=sword_blade)
         elif arm_pose == "up":
             d.rectangle([28, 50, 30, 62], fill=sword_handle)
             d.rectangle([28, 60, 36, 62], fill=sword_guard)
             d.rectangle([36, 58, 42, 62], fill=sword_blade)
-        elif arm_pose == "wind":  # preparaÃ§Ã£o do golpe
+        elif arm_pose == "wind":
             d.rectangle([30, 42, 32, 58], fill=sword_handle)
             d.rectangle([29, 56, 35, 58], fill=sword_guard)
             d.rectangle([35, 54, 46, 58], fill=sword_blade)
-        elif arm_pose == "swing":  # golpe atravessando
+        elif arm_pose == "swing":
             d.rectangle([22, 40, 34, 44], fill=sword_handle)
             d.rectangle([22, 44, 34, 46], fill=sword_guard)
-            d.rectangle([34, 42, 44, 44], fill=sword_blade)
-        elif arm_pose == "follow":  # final do golpe, para baixo
+            d.rectangle([34, 42, 48, 46], fill=sword_blade)
+        elif arm_pose == "follow":
             d.rectangle([30, 28, 32, 42], fill=sword_handle)
             d.rectangle([29, 40, 35, 42], fill=sword_guard)
             d.rectangle([32, 28, 42, 30], fill=sword_blade)
@@ -84,19 +98,12 @@ def make_warrior_textures():
 
         return img
 
-    # AnimaÃ§Ãµes: idle (respiro), run (4 frames), attack (5 frames com espada)
+    # animações
     idle = [frame(0, "down"), frame(2, "down")]
     run = [frame(0, "down"), frame(1, "mid"), frame(2, "down"), frame(3, "mid")]
-    attack = [
-        frame(0, "wind"),  # preparaÃ§Ã£o
-        frame(1, "up"),    # espada no alto
-        frame(2, "swing"), # golpe atravessando
-        frame(3, "follow"),# seguimento
-        frame(0, "down"),  # recuperaÃ§Ã£o
-    ]
+    attack = [frame(0, "wind"), frame(1, "up"), frame(2, "swing"), frame(3, "follow"), frame(0, "down")]
 
     def tex(name, img):
-        # Corrige orientaÃ§Ã£o vertical (PIL usa origem no topo)
         return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
@@ -502,4 +509,8 @@ def make_cloud_texture(width: int = 180, height: int = 90, alpha: int = 235) -> 
     d.rounded_rectangle([int(w * 0.05), int(h * 0.62), int(w * 0.95), int(h * 0.96)], radius=12, fill=shade)
 
     return arcade.Texture(name=f"cloud_{width}x{height}", image=img)
+
+
+
+
 
