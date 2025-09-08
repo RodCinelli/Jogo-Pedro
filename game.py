@@ -12,6 +12,7 @@ from assets.sprites import (
     make_orc_textures,
     make_goblin_textures,
     make_cloud_texture,
+    make_sword_fx_texture,
 )
 
 # ConfiguraÃ§Ãµes bÃ¡sicas
@@ -49,6 +50,7 @@ class GameWindow(arcade.Window):
         self.enemy_list = arcade.SpriteList()
         self.pickup_list = arcade.SpriteList()
         self.clouds = arcade.SpriteList()
+        self.fx_list = arcade.SpriteList()
 
         self.player = arcade.Sprite()
         self.physics_engine = None
@@ -89,6 +91,9 @@ class GameWindow(arcade.Window):
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
         self.player_damage = 1
+        self.super_sword = False
+        self.banner_timer = 0.0
+        self.banner_text = ""
         self.game_over = False
         self.input_name = ""
         self.game_over_title = None
@@ -157,8 +162,9 @@ class GameWindow(arcade.Window):
 
         # Plataformas extras para popular e espaÃ§ar mais a tela
         dx_base = 160
+        # Afastar um pouco as duas plataformas centrais do primeiro andar
         extra_levels = [
-            [-3 * dx_base, -1 * dx_base, 1 * dx_base, 3 * dx_base],
+            [-3 * dx_base, -1 * dx_base - 40, 1 * dx_base + 40, 3 * dx_base],
             [-2 * dx_base, 0, 2 * dx_base],
         ]
         row1_extras = []
@@ -179,7 +185,7 @@ class GameWindow(arcade.Window):
                 else:
                     row2_extras.append((ex, ep.top, patrol_min, patrol_max))
 
-        # BaÃº do machado melhor na plataforma mais alta (direita)
+        # BaÃº do espada melhor na plataforma mais alta (direita)
         top_y = max(y for _, y in stairs_left + stairs_right)
         center_top = arcade.Sprite()
         center_top.texture = stair_tex
@@ -187,6 +193,8 @@ class GameWindow(arcade.Window):
         center_top.center_y = top_y + step_h
         self.wall_list.append(center_top)
         self.spawn_chest(center_top.center_x, center_top.center_y + 18)
+        # Centro para órbita dos morcegos
+        self.chest_orbit_center = (center_top.center_x, center_top.center_y + 18)
 
         # Jogador
         self.player = arcade.Sprite()
@@ -342,7 +350,10 @@ class GameWindow(arcade.Window):
         self.wall_list.draw()
         self.enemy_list.draw()
         self.pickup_list.draw()
-        # Barras de vida dos slimes
+        self.player_list.draw()
+        # Efeitos (slash, espada do baú)
+        self.fx_list.draw()
+        # Barras de vida nos inimigos
         for e in self.enemy_list:
             if getattr(e, 'max_hp', None):
                 w = 28
@@ -351,7 +362,24 @@ class GameWindow(arcade.Window):
                 y0 = e.top + 6
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + w, y0, y0 + 4, (40, 40, 40))
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + w * ratio, y0, y0 + 4, (80, 220, 100))
-        self.player_list.draw()
+        
+        # Banner de upgrade
+        if getattr(self, 'banner_timer', 0) > 0:
+            t = self.banner_timer
+            fade_in = 0.3
+            fade_out = 0.3
+            total = 3.0
+            a = 1.0
+            if t > total - fade_out:
+                a = max(0.0, (total - t) / fade_out)
+            elif t < fade_in:
+                a = max(0.0, t / fade_in)
+            alpha = int(255 * a)
+            text = self.banner_text or "Super Espada Adquirida! Dobro de dano ativado!"
+            x = SCREEN_WIDTH // 2 - 280
+            y = SCREEN_HEIGHT - 40
+            arcade.draw_text(text, x + 2, y - 2, (0, 0, 0, alpha), 18)
+            arcade.draw_text(text, x, y, (255, 215, 0, alpha), 18)
 
         # Vida do jogador (corações com meio-coração)
         heart_w, heart_h = 18, 12
@@ -459,33 +487,26 @@ class GameWindow(arcade.Window):
             # Vivo: movimento
             e.center_x += e.change_x
             if e.type == "bat":
-                # Dive logic
+                # Dive logic + patrulha em onda (comportamento anterior)
                 if e.diving:
                     e.dive_timer += delta_time
-                    # DireÃ§Ã£o para o jogador
                     dir_x = 1 if self.player.center_x > e.center_x else -1
-                    e.change_x = (ENEMY_SPEED + 1.2) * dir_x
-                    # Desce mais lentamente atÃ© a altura do jogador
+                    e.change_x = (BAT_SPEED + 0.2) * dir_x
                     if e.center_y > self.player.center_y + 8:
                         e.center_y -= 4
                     else:
                         e.center_y += 1  # overshoot leve
-                    # Termina dive apÃ³s tempo ou se passou do jogador
                     if e.dive_timer > 1.2 or abs(e.center_y - self.player.center_y) < 10:
                         e.diving = False
                         e.dive_cooldown = 2.5
                 else:
-                    # Patrulha em onda
                     e.wave_t += delta_time
                     amp = 18
-                    # Volta suavemente ao y base
                     base_y = e.start_y + amp * math.sin(e.wave_t * 6)
                     e.center_y += (base_y - e.center_y) * 0.15
-                    # Checa se pode iniciar dive
                     if e.dive_cooldown > 0:
                         e.dive_cooldown -= delta_time
                     else:
-                        # SÃ³ faz rasante se o jogador nÃ£o estiver no chÃ£o
                         player_on_ground = self.player.bottom <= self.ground_top + 6
                         if (not player_on_ground) and abs(self.player.center_x - e.center_x) < 240 and e.center_y > self.player.center_y + 40:
                             e.diving = True
@@ -496,8 +517,6 @@ class GameWindow(arcade.Window):
             if e.center_x > e.bound_right:
                 e.center_x = e.bound_right
                 e.change_x *= -1
-
-            e.facing_right = e.change_x >= 0
             e.anim_timer += delta_time
             if e.hurt_timer > 0:
                 e.hurt_timer -= delta_time
@@ -557,16 +576,6 @@ class GameWindow(arcade.Window):
                         h.hurt_timer = 0.25
                         h.center_x += 10 if self.facing_right else -10
 
-        # Decai invulnerabilidade do jogador
-        if self.player_invuln > 0:
-            self.player_invuln -= delta_time
-
-        # AnimaÃ§Ã£o
-        self.anim_timer += delta_time
-        if self.anim_timer > 0.12:
-            self.anim_timer = 0
-            self.anim_index += 1
-
         state = "idle"
         if self.is_attacking:
             state = "attack"
@@ -583,15 +592,44 @@ class GameWindow(arcade.Window):
             idx = self.anim_index % len(frames)
         self.player.texture = frames[idx]
 
-        # Coleta de pickups (coraÃ§Ãµes)
+        # Atualiza efeitos visuais (espada do baú)
+        for fx in list(self.fx_list):
+            fx.life += delta_time
+            if getattr(fx, 'effect_type', '') == 'sword_pickup':
+                dur = getattr(fx, 'duration', 1.6)
+                fx.center_y += 40 * delta_time
+                fx.alpha = max(0, int(255 * (1 - fx.life / dur)))
+                if fx.life >= dur:
+                    fx.remove_from_sprite_lists()
+
+        # Coleta de pickups (corações)
         for item in arcade.check_for_collision_with_list(self.player, self.pickup_list):
             if hasattr(item, 'is_heart') and item.is_heart:
                 if self.player_hp < float(self.player_max_hp):
                     self.player_hp = min(float(self.player_max_hp), self.player_hp + 1.0)
                 item.remove_from_sprite_lists()
             elif hasattr(item, 'is_chest') and item.is_chest:
+                # Upgrade de espada: dobra o dano e mostra efeitos
                 self.player_damage = 2
+                self.super_sword = True
+                fx = arcade.Sprite()
+                fx.texture = make_sword_fx_texture(22, 48)
+                fx.center_x = item.center_x
+                fx.center_y = item.center_y + 12
+                fx.effect_type = 'sword_pickup'
+                fx.life = 0.0
+                fx.duration = 1.6
+                fx.alpha = 255
+                self.fx_list.append(fx)
+                self.banner_text = "Super Espada Adquirida! Dobro de dano ativado!"
+                self.banner_timer = 3.0
                 item.remove_from_sprite_lists()
+
+        # Banner
+        if getattr(self, 'banner_timer', 0) > 0:
+            self.banner_timer -= delta_time
+        # Coleta de pickups (coraÃ§Ãµes)
+
 
     def on_key_press(self, key, modifiers):
         if self.game_over:
@@ -609,7 +647,7 @@ class GameWindow(arcade.Window):
         elif key == arcade.key.RIGHT:
             self.right_pressed = True
         elif key == arcade.key.SPACE:
-            if self.physics_engine.can_jump():
+            if self.physics_engine and self.physics_engine.can_jump():
                 self.player.change_y = PLAYER_JUMP_SPEED
         elif key == arcade.key.Z or key == arcade.key.Q:
             if not self.is_attacking:
@@ -618,7 +656,6 @@ class GameWindow(arcade.Window):
                 self.enemies_hit = set()
         elif key == arcade.key.ESCAPE:
             self.close()
-
     def on_key_release(self, key, modifiers):
         if key == arcade.key.LEFT:
             self.left_pressed = False
@@ -661,4 +698,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
 

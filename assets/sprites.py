@@ -1,4 +1,4 @@
-import random
+﻿import random
 import arcade
 from PIL import Image, ImageDraw, ImageOps
 
@@ -9,14 +9,15 @@ def _outline(d: ImageDraw.ImageDraw, rect, color=(20, 20, 28, 255)):
 
 
 def make_warrior_textures():
-    """Warrior com machado, pixel-art simples com mais detalhes e animações."""
+    """Warrior com espada, pixel-art simples com mais detalhes e animaÃ§Ãµes."""
     w, h = 48, 64
     armor = (72, 120, 220, 255)
     armor_dark = (52, 90, 170, 255)
     skin = (234, 200, 170, 255)
     boot = (60, 40, 30, 255)
-    axe_handle = (140, 90, 30, 255)
-    axe_head = (210, 210, 220, 255)
+    sword_handle = (140, 90, 30, 255)
+    sword_guard = (180, 180, 190, 255)
+    sword_blade = (210, 210, 220, 255)
 
     def frame(leg_phase: int, arm_pose: str):
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
@@ -40,49 +41,58 @@ def make_warrior_textures():
         d.rectangle([12, 44, 18, 50], fill=armor_dark)
         d.rectangle([30, 44, 36, 50], fill=armor_dark)
 
-        # Cabeça/Elmo simples
+        # CabeÃ§a/Elmo simples
         d.rectangle([18, 46, 30, 58], fill=skin)
         d.rectangle([16, 56, 32, 60], fill=armor_dark)
         _outline(d, [18, 46, 30, 58])
 
-        # Braço e Machado (posições mais ricas)
+        # BraÃ§o e Espada
         if arm_pose == "down":
-            d.rectangle([32, 38, 34, 50], fill=axe_handle)
-            d.rectangle([34, 46, 44, 53], fill=axe_head)
+            # punho
+            d.rectangle([32, 38, 34, 50], fill=sword_handle)
+            # guarda (cruzeta)
+            d.rectangle([33, 46, 38, 48], fill=sword_guard)
+            # lÃ¢mina apontando para baixo
+            d.rectangle([38, 44, 42, 60], fill=sword_blade)
         elif arm_pose == "mid":
-            d.rectangle([32, 44, 34, 56], fill=axe_handle)
-            d.rectangle([26, 54, 34, 60], fill=axe_head)
+            d.rectangle([32, 44, 34, 56], fill=sword_handle)
+            d.rectangle([31, 54, 37, 56], fill=sword_guard)
+            d.rectangle([37, 54, 44, 60], fill=sword_blade)
         elif arm_pose == "up":
-            d.rectangle([28, 50, 30, 62], fill=axe_handle)
-            d.rectangle([20, 58, 30, 62], fill=axe_head)
-        elif arm_pose == "wind":  # preparação do golpe
-            d.rectangle([30, 42, 32, 58], fill=axe_handle)
-            d.rectangle([22, 56, 30, 62], fill=axe_head)
+            d.rectangle([28, 50, 30, 62], fill=sword_handle)
+            d.rectangle([28, 60, 36, 62], fill=sword_guard)
+            d.rectangle([36, 58, 42, 62], fill=sword_blade)
+        elif arm_pose == "wind":  # preparaÃ§Ã£o do golpe
+            d.rectangle([30, 42, 32, 58], fill=sword_handle)
+            d.rectangle([29, 56, 35, 58], fill=sword_guard)
+            d.rectangle([35, 54, 46, 58], fill=sword_blade)
         elif arm_pose == "swing":  # golpe atravessando
-            d.rectangle([22, 40, 34, 44], fill=axe_handle)
-            d.rectangle([34, 36, 44, 44], fill=axe_head)
+            d.rectangle([22, 40, 34, 44], fill=sword_handle)
+            d.rectangle([22, 44, 34, 46], fill=sword_guard)
+            d.rectangle([34, 42, 44, 44], fill=sword_blade)
         elif arm_pose == "follow":  # final do golpe, para baixo
-            d.rectangle([30, 28, 32, 42], fill=axe_handle)
-            d.rectangle([30, 26, 40, 32], fill=axe_head)
+            d.rectangle([30, 28, 32, 42], fill=sword_handle)
+            d.rectangle([29, 40, 35, 42], fill=sword_guard)
+            d.rectangle([32, 28, 42, 30], fill=sword_blade)
 
         # Cinto detalhe
         d.rectangle([14, 36, 34, 38], fill=(40, 30, 20, 255))
 
         return img
 
-    # Animações: idle (respiro), run (4 frames), attack (5 frames com machado)
+    # AnimaÃ§Ãµes: idle (respiro), run (4 frames), attack (5 frames com espada)
     idle = [frame(0, "down"), frame(2, "down")]
     run = [frame(0, "down"), frame(1, "mid"), frame(2, "down"), frame(3, "mid")]
     attack = [
-        frame(0, "wind"),  # preparação
-        frame(1, "up"),    # machado no alto
+        frame(0, "wind"),  # preparaÃ§Ã£o
+        frame(1, "up"),    # espada no alto
         frame(2, "swing"), # golpe atravessando
         frame(3, "follow"),# seguimento
-        frame(0, "down"),  # recuperação
+        frame(0, "down"),  # recuperaÃ§Ã£o
     ]
 
     def tex(name, img):
-        # Corrige orientação vertical (PIL usa origem no topo)
+        # Corrige orientaÃ§Ã£o vertical (PIL usa origem no topo)
         return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
@@ -99,8 +109,59 @@ def make_warrior_textures():
     return textures
 
 
+def make_sword_fx_texture(width: int = 18, height: int = 42) -> arcade.Texture:
+    """Espada com brilho para efeito de upgrade do baú."""
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    handle = (150, 100, 60, 255)
+    guard = (210, 200, 150, 255)
+    blade = (235, 240, 250, 255)
+    glow = (255, 240, 120, 120)
+    # brilho ao redor
+    d.ellipse([2, 2, width - 2, height - 2], fill=(255, 255, 200, 25), outline=None)
+    # punho
+    d.rectangle([width // 2 - 1, height - 12, width // 2 + 1, height - 4], fill=handle)
+    # guarda
+    d.rectangle([width // 2 - 5, height - 14, width // 2 + 5, height - 12], fill=guard)
+    # lâmina
+    d.rectangle([width // 2 - 1, 4, width // 2 + 1, height - 14], fill=blade)
+    d.rectangle([width // 2 - 0, 6, width // 2 + 0, height - 16], fill=(255, 255, 255, 180))
+    # halo de brilho
+    d.ellipse([width // 2 - 7, height - 18, width // 2 + 7, height - 8], fill=glow)
+    return arcade.Texture(name=f"sword_fx_{width}x{height}", image=ImageOps.flip(img))
+
+
+def make_slash_textures():
+    """Conjunto de 3 frames de efeito de corte (slash), direita/esquerda."""
+    w, h = 64, 48
+
+    def frame(alpha: int, tilt: int):
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        color = (255, 240, 160, alpha)
+        core = (255, 255, 255, min(255, alpha + 40))
+        # formato em cunha
+        d.polygon([(10, 20 + tilt), (54, 14 + tilt), (54, 26 + tilt)], fill=color)
+        d.polygon([(12, 21 + tilt), (46, 16 + tilt), (46, 24 + tilt)], fill=core)
+        return img
+
+    f0 = frame(180, -3)
+    f1 = frame(220, 0)
+    f2 = frame(160, 3)
+
+    def tex(name, img):
+        return arcade.Texture(name=name, image=ImageOps.flip(img))
+
+    def mirror(img):
+        return ImageOps.mirror(img)
+
+    right = [tex("slash_r0", f0), tex("slash_r1", f1), tex("slash_r2", f2)]
+    left = [tex("slash_l0", mirror(f0)), tex("slash_l1", mirror(f1)), tex("slash_l2", mirror(f2))]
+    return {"slash_right": right, "slash_left": left}
+
+
 def make_ground_texture(width: int, height: int) -> arcade.Texture:
-    """Gera textura do chão com grama e terra com ruído simples."""
+    """Gera textura do chÃ£o com grama e terra com ruÃ­do simples."""
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     grass_h = max(6, int(height * 0.35))
@@ -118,7 +179,7 @@ def make_ground_texture(width: int, height: int) -> arcade.Texture:
     # Grama topo (duas faixas de tons)
     d.rectangle([0, dirt_h, width, height], fill=(62, 142, 78, 255))
     d.rectangle([0, height - 2, width, height], fill=(200, 240, 180, 255))
-    # Lâminas de grama
+    # LÃ¢minas de grama
     for x in range(0, width, 6):
         top = height - random.randint(0, 2)
         d.line([x, dirt_h, x, top], fill=(70, 160, 90, 255))
@@ -136,11 +197,11 @@ def make_platform_texture(width: int, height: int) -> arcade.Texture:
     light = (170, 134, 90, 255)
 
     d.rectangle([0, 0, width, height], fill=base)
-    # Tábuas verticais
+    # TÃ¡buas verticais
     plank_w = 28
     for x in range(0, width, plank_w):
         d.line([x, 0, x, height], fill=dark)
-        # nós da madeira
+        # nÃ³s da madeira
         for _ in range(2):
             px = x + random.randint(6, plank_w - 6)
             py = random.randint(4, height - 6)
@@ -152,7 +213,7 @@ def make_platform_texture(width: int, height: int) -> arcade.Texture:
 
 
 def make_slime_textures(base=(80, 200, 120, 255)):
-    """Cria texturas de slime (walk/hurt/die) com frames básicos."""
+    """Cria texturas de slime (walk/hurt/die) com frames bÃ¡sicos."""
     w, h = 36, 28
 
     def slime_frame(phase: int):
@@ -169,12 +230,12 @@ def make_slime_textures(base=(80, 200, 120, 255)):
         return img
 
     walk = [slime_frame(i) for i in range(4)]
-    # Hurt: versão mais clara
+    # Hurt: versÃ£o mais clara
     def tint(img, a=80):
         c = Image.new("RGBA", img.size, (255, 255, 255, a))
         return Image.alpha_composite(img, c)
     hurt = [tint(walk[1]), tint(walk[2])]
-    # Die: encolhe em três passos
+    # Die: encolhe em trÃªs passos
     def shrink(img, s):
         w, h = img.size
         nw, nh = int(w * s), int(h * s)
@@ -209,7 +270,7 @@ def make_bat_textures(base=(150, 100, 200, 255)):
         d = ImageDraw.Draw(img)
         # Corpo
         d.ellipse([12, 6, 20, 14], fill=base, outline=(60, 40, 90, 255))
-        # Cabeça/orelhas
+        # CabeÃ§a/orelhas
         d.rectangle([9, 7, 12, 12], fill=base)
         d.polygon([(9, 12), (7, 16), (11, 14)], fill=(60, 40, 90, 255))
         # Asas variam pela fase
@@ -240,7 +301,7 @@ def make_bat_textures(base=(150, 100, 200, 255)):
 def make_goblin_textures(base=(60, 170, 90, 255)):
     """Cria texturas simples de um goblin que anda (walk/hurt/die).
 
-    Mantém o mesmo conjunto de chaves do slime para reaproveitar lógica.
+    MantÃ©m o mesmo conjunto de chaves do slime para reaproveitar lÃ³gica.
     """
     w, h = 36, 42
 
@@ -260,7 +321,7 @@ def make_goblin_textures(base=(60, 170, 90, 255)):
         d.rectangle([8, 10, 28, 28], fill=body, outline=dark)
         # Cinto
         d.rectangle([8, 16, 28, 18], fill=belt)
-        # Cabeça com orelhas
+        # CabeÃ§a com orelhas
         d.rectangle([10, 28, 26, 38], fill=body, outline=dark)
         d.polygon([(10, 38), (6, 36), (10, 34)], fill=dark)
         d.polygon([(26, 38), (30, 36), (26, 34)], fill=dark)
@@ -306,7 +367,7 @@ def make_goblin_textures(base=(60, 170, 90, 255)):
 def make_orc_textures(base=(200, 70, 70, 255)):
     """Texturas de um orc vermelho que anda (walk/hurt/die).
 
-    Usa o mesmo conjunto de chaves dos walkers para encaixar na lógica atual.
+    Usa o mesmo conjunto de chaves dos walkers para encaixar na lÃ³gica atual.
     """
     w, h = 40, 48
     body = base
@@ -328,7 +389,7 @@ def make_orc_textures(base=(200, 70, 70, 255)):
         # Ombreiras escuras
         d.rectangle([6, 32, 12, 36], fill=dark)
         d.rectangle([28, 32, 34, 36], fill=dark)
-        # Cabeça com presas
+        # CabeÃ§a com presas
         d.rectangle([10, 32, 30, 44], fill=body, outline=dark)
         d.rectangle([14, 36, 16, 38], fill=eye)
         d.rectangle([24, 36, 26, 38], fill=eye)
@@ -370,16 +431,16 @@ def make_orc_textures(base=(200, 70, 70, 255)):
 
 
 def make_heart_texture(width: int = 18, height: int = 16) -> arcade.Texture:
-    """Cria textura de coração para pickups de vida."""
+    """Cria textura de coraÃ§Ã£o para pickups de vida."""
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     red = (220, 60, 80, 255)
     dark = (150, 30, 50, 255)
-    # Dois círculos no topo
+    # Dois cÃ­rculos no topo
     r = width // 4
     d.ellipse([2, 2, 2 + 2 * r, 2 + 2 * r], fill=red, outline=dark)
     d.ellipse([width - 2 - 2 * r, 2, width - 2, 2 + 2 * r], fill=red, outline=dark)
-    # Triângulo inferior
+    # TriÃ¢ngulo inferior
     top_y = r + 3
     d.polygon([(2, top_y), (width - 2, top_y), (width // 2, height - 2)], fill=red, outline=dark)
     # Brilho
@@ -388,7 +449,7 @@ def make_heart_texture(width: int = 18, height: int = 16) -> arcade.Texture:
 
 
 def make_chest_texture(width: int = 28, height: int = 22) -> arcade.Texture:
-    """Cria textura de baú com detalhes metálicos."""
+    """Cria textura de baÃº com detalhes metÃ¡licos."""
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     wood = (150, 100, 60, 255)
@@ -397,7 +458,7 @@ def make_chest_texture(width: int = 28, height: int = 22) -> arcade.Texture:
     d.rectangle([1, 4, width - 2, height - 2], fill=wood, outline=dark)
     # Arcos
     d.rectangle([1, height // 2, width - 2, height - 2], outline=dark)
-    # Faixas metálicas
+    # Faixas metÃ¡licas
     d.rectangle([width // 2 - 2, 4, width // 2 + 2, height - 2], fill=metal)
     d.rectangle([1, 8, width - 2, 10], fill=metal)
     # Fecho
@@ -408,8 +469,8 @@ def make_chest_texture(width: int = 28, height: int = 22) -> arcade.Texture:
 def make_cloud_texture(width: int = 180, height: int = 90, alpha: int = 235) -> arcade.Texture:
     """Gera uma textura de nuvem fofa usando elipses sobrepostas.
 
-    - width/height: dimensões do sprite
-    - alpha: transparência do branco da nuvem
+    - width/height: dimensÃµes do sprite
+    - alpha: transparÃªncia do branco da nuvem
     """
     width = max(60, int(width))
     height = max(30, int(height))
@@ -435,3 +496,4 @@ def make_cloud_texture(width: int = 180, height: int = 90, alpha: int = 235) -> 
     d.rounded_rectangle([int(w * 0.05), int(h * 0.62), int(w * 0.95), int(h * 0.96)], radius=12, fill=shade)
 
     return arcade.Texture(name=f"cloud_{width}x{height}", image=img)
+
