@@ -66,16 +66,16 @@ def make_warrior_textures():
         d.rectangle([23, 54, 25, 58], fill=armor_dark)
         _outline(d, [18, 46, 30, 58])
 
-        # Braço e Espada (~30 graus em relação à horizontal)
+        # Braço e Espada (~45 graus em relação à horizontal)
         if arm_pose == "down":
             d.rectangle([30, 44, 32, 50], fill=sword_handle)
             d.rectangle([32, 46, 36, 48], fill=sword_guard)
-            # lâmina diagonal (aprox. 30°): paralelogramo
-            d.polygon([(36, 46), (52, 40), (54, 43), (38, 49)], fill=sword_blade)
+            # lâmina diagonal (~45°)
+            d.polygon([(36, 46), (49, 33), (51, 35), (38, 48)], fill=sword_blade)
         elif arm_pose == "mid":
             d.rectangle([30, 42, 32, 48], fill=sword_handle)
             d.rectangle([32, 44, 36, 46], fill=sword_guard)
-            d.polygon([(36, 44), (52, 38), (54, 41), (38, 47)], fill=sword_blade)
+            d.polygon([(36, 44), (49, 31), (51, 33), (38, 46)], fill=sword_blade)
         elif arm_pose == "up":
             d.rectangle([28, 50, 30, 62], fill=sword_handle)
             d.rectangle([28, 60, 36, 62], fill=sword_guard)
