@@ -3,6 +3,7 @@ import random
 import math
 import sqlite3
 import os
+import time
 from assets.sprites import (
     make_warrior_textures,
     make_ground_texture,
@@ -84,8 +85,8 @@ class GameWindow(arcade.Window):
 
         self.textures = make_warrior_textures()
         self.db_path = os.path.join(os.getcwd(), 'warrior_platform.db')
-        # Inicializa banco (no futuro para scores/perfis)
-        # self.ensure_db()
+        # Inicializa banco (scores/perfis)
+        self.ensure_db()
         self.setup()
 
     def setup(self):
@@ -95,11 +96,12 @@ class GameWindow(arcade.Window):
         self.pickup_list = arcade.SpriteList()
         self.clouds = arcade.SpriteList()
         self.score = 0
-        self.score_text = arcade.Text("Score: 0", 10, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
+        self.score_text = arcade.Text("Score: 0", 10, self.height - 30, arcade.color.WHITE, 16)
         # Timer de 5 minutos
         self.time_limit = 300.0
         self.time_remaining = self.time_limit
-        self.timer_text = arcade.Text("Tempo: 05:00", SCREEN_WIDTH - 170, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
+        # Posição inicial baseada no tamanho atual da janela
+        self.timer_text = arcade.Text("Tempo: 05:00", self.width - 10, self.height - 30, arcade.color.WHITE, 16, anchor_x="right")
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
         self.player_damage = 1
@@ -356,22 +358,49 @@ class GameWindow(arcade.Window):
         # Tela de título (usa Text para performance)
         if self.state == 'title':
             arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (20, 20, 30))
-            cx, cy = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
-            title = arcade.Text("Warrior Platform", cx, cy + 140, arcade.color.GOLD, 40, anchor_x="center")
-            prompt = arcade.Text("Digite seu nome:", cx, cy + 70, arcade.color.ANTIQUE_WHITE, 20, anchor_x="center")
+            # Desloca levemente o container para a esquerda e um pouco para baixo
+            offset_x = -int(SCREEN_WIDTH * 0.05)
+            offset_y = -int(SCREEN_HEIGHT * 0.08)
+            cx, cy = SCREEN_WIDTH // 2 + offset_x, SCREEN_HEIGHT // 2 + offset_y
+
+            # Proporções responsivas
+            title_size = int(min(SCREEN_WIDTH, SCREEN_HEIGHT) * 0.04)
+            prompt_size = int(title_size * 0.5)
+            btn_w = int(SCREEN_WIDTH * 0.16)
+            btn_h = max(36, int(SCREEN_HEIGHT * 0.038))
+            box_w = btn_w  # caixa do nome do tamanho do botão
+            box_h = max(32, int(SCREEN_HEIGHT * 0.03))
+
+            title = arcade.Text("Warrior Platform", cx, cy + int(SCREEN_HEIGHT * 0.13), arcade.color.GOLD, title_size, anchor_x="center")
+            prompt_y = cy + int(SCREEN_HEIGHT * 0.065)
+            prompt = arcade.Text("Digite seu nome:", cx, prompt_y, arcade.color.ANTIQUE_WHITE, prompt_size, anchor_x="center")
             title.draw(); prompt.draw()
-            box_w, box_h = 360, 36
+
+            # Caixa de texto (uma linha de espaço entre prompt e campo)
             x0, x1 = cx - box_w // 2, cx + box_w // 2
-            y0, y1 = cy + 30, cy + 30 + box_h
+            gap = int(prompt_size * 1.2)
+            y1 = prompt_y - gap
+            y0 = y1 - box_h
             arcade.draw_lrbt_rectangle_filled(x0, x1, y0, y1, (44, 46, 64))
-            arcade.Text((self.player_name or '') + '_', x0 + 10, y0 + 7, arcade.color.WHITE, 18).draw()
-            btn_w, btn_h = 300, 44
+            arcade.draw_lrbt_rectangle_outline(x0, x1, y0, y1, (90, 94, 122), border_width=2)
+            name_shown = (self.player_name or '')
+            caret = '_' if (time.perf_counter() % 1.0) < 0.5 else ' '
+            input_font = max(18, int(prompt_size * 0.9))
+            field_cx = (x0 + x1) // 2
+            # Texto centralizado no meio do campo: cresce simetricamente para os dois lados
+            arcade.Text(name_shown + caret, field_cx, y0 + (box_h - input_font) // 2, arcade.color.WHITE, input_font, anchor_x="center").draw()
+
+            # Botão iniciar (posicionado logo abaixo do campo)
             bx0, bx1 = cx - btn_w // 2, cx + btn_w // 2
-            by0, by1 = cy - 46, cy - 46 + btn_h
+            btn_gap = int(SCREEN_HEIGHT * 0.03)
+            by0 = y0 - btn_gap - btn_h
+            by1 = by0 + btn_h
             self.start_btn = (bx0, by0, bx1, by1)
-            arcade.draw_lrbt_rectangle_filled(bx0, bx1, by0, by1, (70, 120, 80))
+            hover = getattr(self, 'mouse_x', None) is not None and bx0 <= self.mouse_x <= bx1 and by0 <= getattr(self, 'mouse_y', -1) <= by1
+            btn_color = (80, 140, 90) if hover else (70, 120, 80)
+            arcade.draw_lrbt_rectangle_filled(bx0, bx1, by0, by1, btn_color)
             arcade.draw_lrbt_rectangle_outline(bx0, bx1, by0, by1, (30, 60, 36), border_width=2)
-            arcade.Text("Começar Jogo (Enter)", cx, by0 + 10, arcade.color.WHITE, 22, anchor_x="center").draw()
+            arcade.Text("Começar Jogo (Enter)", cx, by0 + (btn_h - prompt_size) // 2, arcade.color.WHITE, max(20, int(prompt_size * 0.9)), anchor_x="center").draw()
             return
 
         # CÃ©u simples
@@ -387,6 +416,14 @@ class GameWindow(arcade.Window):
         self.fx_list.draw()
         # Barras de vida nos inimigos
         for e in self.enemy_list:
+            w = 28
+            ratio = max(0.0, min(1.0, e.hp / e.max_hp))
+            x0 = e.center_x - w / 2
+            y0 = e.top + 6
+            arcade.draw_lrbt_rectangle_filled(x0, x0 + w, y0, y0 + 4, (40, 40, 40))
+            arcade.draw_lrbt_rectangle_filled(x0, x0 + w * ratio, y0, y0 + 4, (80, 220, 100))
+        
+        # Banner de upgrade (fade in/out, centralizado)
         if getattr(self, 'banner_timer', 0) > 0:
             t = self.banner_timer
             fade_in, fade_out, total = 0.3, 0.3, 3.0
@@ -396,33 +433,12 @@ class GameWindow(arcade.Window):
             elif t < fade_in:
                 a = max(0.0, t / fade_in)
             alpha = int(255 * a)
-            btxt = self.banner_text or ""
-            arcade.Text(btxt, SCREEN_WIDTH//2 + 2, SCREEN_HEIGHT - 42, (0,0,0,alpha), 18, anchor_x="center").draw()
-            arcade.Text(btxt, SCREEN_WIDTH//2, SCREEN_HEIGHT - 40, (255,215,0,alpha), 18, anchor_x="center").draw()
-                w = 28
-                ratio = max(0.0, min(1.0, e.hp / e.max_hp))
-                x0 = e.center_x - w / 2
-                y0 = e.top + 6
-                arcade.draw_lrbt_rectangle_filled(x0, x0 + w, y0, y0 + 4, (40, 40, 40))
-                arcade.draw_lrbt_rectangle_filled(x0, x0 + w * ratio, y0, y0 + 4, (80, 220, 100))
-        
-        # Banner de upgrade
-        if getattr(self, 'banner_timer', 0) > 0:
-            t = self.banner_timer
-            fade_in = 0.3
-            fade_out = 0.3
-            total = 3.0
-            a = 1.0
-            if t > total - fade_out:
-                a = max(0.0, (total - t) / fade_out)
-            elif t < fade_in:
-                a = max(0.0, t / fade_in)
-            alpha = int(255 * a)
-            text = self.banner_text or "Super Espada Adquirida! Dobro de dano ativado!"
-            x = SCREEN_WIDTH // 2 - 280
-            y = SCREEN_HEIGHT - 40
-            arcade.draw_text(text, x + 2, y - 2, (0, 0, 0, alpha), 18)
-            arcade.draw_text(text, x, y, (255, 215, 0, alpha), 18)
+            btxt = self.banner_text or "Super Espada Adquirida! Dobro de dano ativado!"
+            # usar dimensões atuais da janela para centralizar corretamente
+            win_w, win_h = self.width, self.height
+            banner_shift = int(win_w * 0.015)  # ~0.7% da largura para a esquerda
+            arcade.Text(btxt, win_w//2 + banner_shift + 2, win_h - 42, (0,0,0,alpha), 18, anchor_x="center").draw()
+            arcade.Text(btxt, win_w//2 + banner_shift, win_h - 40, (255,215,0,alpha), 18, anchor_x="center").draw()
 
         # Vida do jogador (corações com meio-coração)
         heart_w, heart_h = 18, 12
@@ -430,7 +446,8 @@ class GameWindow(arcade.Window):
         has_half = (self.player_hp - full) >= 0.5
         for i in range(self.player_max_hp):
             x0 = 10 + i * (heart_w + 6)
-            y0 = SCREEN_HEIGHT - 60
+            # espaço único (score ~height-30, corações ~height-60)
+            y0 = self.height - 60
             # base vazia
             arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w, y0, y0 + heart_h, (80, 70, 70))
             if i < full:
@@ -438,26 +455,38 @@ class GameWindow(arcade.Window):
             elif i == full and has_half:
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w / 2, y0, y0 + heart_h, (220, 60, 80))
         self.score_text.text = f"Score: {self.score}"
+        # alinhar com a margem superior como o timer (usar dimensões atuais)
+        self.score_text.x = 10
+        self.score_text.y = self.height - 30
         self.score_text.draw()
-        # Timer (mm:ss)
+        # Timer (mm:ss) — ancorado no canto superior direito (usar tamanho atual da janela)
         t = max(0, int(self.time_remaining))
         mm, ss = divmod(t, 60)
         self.timer_text.text = f"Tempo: {mm:02d}:{ss:02d}"
         self.timer_text.color = arcade.color.WHITE if self.time_remaining > 30 else arcade.color.SALMON
+        self.timer_text.x = self.width - 10
+        self.timer_text.y = self.height - 30
         self.timer_text.draw()
 
         # Overlays de fim com Top 5
         if self.state in ('victory', 'game_over'):
-            arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (0, 0, 0, 150))
-            title = "VOCÊ VENCEU!" if self.state == 'victory' else "GAME OVER"
-            arcade.draw_text(title, SCREEN_WIDTH // 2 - 160, SCREEN_HEIGHT // 2 + 140, arcade.color.WHITE, 32)
-            arcade.draw_text("Top 5 Scores:", SCREEN_WIDTH // 2 - 120, SCREEN_HEIGHT // 2 + 100, arcade.color.ANTI_FLASH_WHITE, 20)
-            y = SCREEN_HEIGHT // 2 + 70
+            ww, wh = self.width, self.height
+            arcade.draw_lrbt_rectangle_filled(0, ww, 0, wh, (0, 0, 0, 150))
+            title_txt = "VOCÊ VENCEU!" if self.state == 'victory' else "GAME OVER"
+            arcade.Text(title_txt, ww // 2, wh // 2 + 140, arcade.color.WHITE, 32, anchor_x="center").draw()
+            arcade.Text("Top 5 Scores:", ww // 2, wh // 2 + 100, arcade.color.ANTI_FLASH_WHITE, 20, anchor_x="center").draw()
+            y = wh // 2 + 70
+            # Garante que temos os top scores atualizados
+            if not self.top_scores:
+                try:
+                    self.top_scores = self.get_top_scores(5)
+                except Exception:
+                    self.top_scores = []
             for i, (nm, sc) in enumerate(self.top_scores[:5], start=1):
                 col = arcade.color.GOLD if i == 1 else arcade.color.WHITE
-                arcade.draw_text(f"{i}. {nm} - {sc}", SCREEN_WIDTH // 2 - 120, y, col, 18)
+                arcade.Text(f"{i}. {nm} - {sc}", ww // 2, y, col, 18, anchor_x="center").draw()
                 y -= 24
-            arcade.draw_text("Pressione ENTER para voltar ao título", SCREEN_WIDTH // 2 - 220, SCREEN_HEIGHT // 2 - 60, arcade.color.LIGHT_GRAY, 16)
+            arcade.Text("Pressione ENTER para voltar ao título", ww // 2, wh // 2 - 60, arcade.color.LIGHT_GRAY, 16, anchor_x="center").draw()
     def on_update(self, delta_time: float):
         # Estados que não atualizam o mundo
         if self.state != 'playing':
@@ -483,12 +512,9 @@ class GameWindow(arcade.Window):
         self.physics_engine.update()
 
         # Timer: perde se acabar o tempo com inimigos restantes
-        if not self.game_over:
-            self.time_remaining = max(0.0, self.time_remaining - delta_time)
-            if self.time_remaining <= 0.0 and len(self.enemy_list) > 0:
-                self.game_over = True
-
-        if self.game_over:
+        self.time_remaining = max(0.0, self.time_remaining - delta_time)
+        if self.time_remaining <= 0.0 and len(self.enemy_list) > 0:
+            self.end_game('game_over')
             return
 
 
@@ -592,9 +618,14 @@ class GameWindow(arcade.Window):
                 # knockback
                 push = 14 if self.player.center_x < e.center_x else -14
                 self.player.center_x += push
-                if self.player_hp <= 0.0:
-                    self.game_over = True
+            if self.player_hp <= 0.0:
+                    self.end_game('game_over')
                     return
+
+        # Vitória: todos os inimigos foram derrotados
+        if self.state == 'playing' and len(self.enemy_list) == 0:
+            self.end_game('victory')
+            return
 
         # Ataque simples com hitbox na direÃ§Ã£o do guerreiro
         if self.is_attacking:
@@ -689,16 +720,23 @@ class GameWindow(arcade.Window):
         # Entrada na tela de título
         if self.state == 'title':
             if key == arcade.key.ENTER:
-                self.player_name = (self.player_name or 'Player').strip()[:16]
-                try:
-                    self.save_profile(self.player_name)
-                except Exception:
-                    pass
-                self.state = 'playing'
-                self.setup()
+                self.start_game()
                 return
             elif key == arcade.key.BACKSPACE:
                 self.player_name = self.player_name[:-1]
+                return
+            elif key == arcade.key.ESCAPE:
+                self.close()
+                return
+            # Não adicionar caracteres aqui para evitar duplicação com on_text
+            return
+
+        # Tela de Game Over / Vitória
+        if self.state in ('game_over', 'victory'):
+            if key == arcade.key.ENTER:
+                # Volta ao título e reinicia o mundo
+                self.state = 'title'
+                self.setup()
                 return
             elif key == arcade.key.ESCAPE:
                 self.close()
@@ -759,6 +797,48 @@ class GameWindow(arcade.Window):
         chest.center_y = y
         chest.is_chest = True
         self.pickup_list.append(chest)
+
+    def end_game(self, status: str):
+        # status: 'game_over' ou 'victory'
+        try:
+            # Registra score no banco
+            self.record_score(self.player_name.strip() or 'Player', int(self.score))
+        except Exception:
+            # Fallback em arquivo
+            try:
+                self.save_score(self.player_name.strip() or 'Player', int(self.score))
+            except Exception:
+                pass
+        # Atualiza top scores em memória
+        try:
+            self.top_scores = self.get_top_scores(5)
+        except Exception:
+            self.top_scores = []
+        # Ajusta estado
+        self.state = status
+        self.game_over = (status == 'game_over')
+        # Para o banner caso esteja ativo
+        self.banner_timer = 0.0
+
+    # --- Entradas de mouse para tela inicial ---
+    def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
+        self.mouse_x, self.mouse_y = x, y
+
+    def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
+        if self.state == 'title' and getattr(self, 'start_btn', None):
+            bx0, by0, bx1, by1 = self.start_btn
+            if bx0 <= x <= bx1 and by0 <= y <= by1:
+                self.start_game()
+
+    # --- Helpers ---
+    def start_game(self):
+        self.player_name = (self.player_name or 'Player').strip()[:16]
+        try:
+            self.save_profile(self.player_name)
+        except Exception:
+            pass
+        self.state = 'playing'
+        self.setup()
 
         # --- Persistência (SQLite + fallback em arquivo) ---
     def ensure_db(self):
