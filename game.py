@@ -1,6 +1,8 @@
 ﻿import arcade
 import random
 import math
+import sqlite3
+import os
 from assets.sprites import (
     make_warrior_textures,
     make_ground_texture,
@@ -57,6 +59,9 @@ class GameWindow(arcade.Window):
         self.score = 0
         self.score_text = None
         self.timer_text = None
+        self.state = 'title'
+        self.player_name = ''
+        self.top_scores = []
         self.player_max_hp = PLAYER_MAX_HP
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
@@ -78,7 +83,9 @@ class GameWindow(arcade.Window):
         self.enemies_hit = set()
 
         self.textures = make_warrior_textures()
-
+        self.db_path = os.path.join(os.getcwd(), 'warrior_platform.db')
+        # Inicializa banco (no futuro para scores/perfis)
+        # self.ensure_db()
         self.setup()
 
     def setup(self):
@@ -346,6 +353,26 @@ class GameWindow(arcade.Window):
 
     def on_draw(self):
         self.clear()
+        # Tela de título (usa Text para performance)
+        if self.state == 'title':
+            arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (20, 20, 30))
+            cx, cy = SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
+            title = arcade.Text("Warrior Platform", cx, cy + 140, arcade.color.GOLD, 40, anchor_x="center")
+            prompt = arcade.Text("Digite seu nome:", cx, cy + 70, arcade.color.ANTIQUE_WHITE, 20, anchor_x="center")
+            title.draw(); prompt.draw()
+            box_w, box_h = 360, 36
+            x0, x1 = cx - box_w // 2, cx + box_w // 2
+            y0, y1 = cy + 30, cy + 30 + box_h
+            arcade.draw_lrbt_rectangle_filled(x0, x1, y0, y1, (44, 46, 64))
+            arcade.Text((self.player_name or '') + '_', x0 + 10, y0 + 7, arcade.color.WHITE, 18).draw()
+            btn_w, btn_h = 300, 44
+            bx0, bx1 = cx - btn_w // 2, cx + btn_w // 2
+            by0, by1 = cy - 46, cy - 46 + btn_h
+            self.start_btn = (bx0, by0, bx1, by1)
+            arcade.draw_lrbt_rectangle_filled(bx0, bx1, by0, by1, (70, 120, 80))
+            arcade.draw_lrbt_rectangle_outline(bx0, bx1, by0, by1, (30, 60, 36), border_width=2)
+            arcade.Text("Começar Jogo (Enter)", cx, by0 + 10, arcade.color.WHITE, 22, anchor_x="center").draw()
+            return
 
         # CÃ©u simples
         arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 260, SCREEN_HEIGHT, (50, 70, 110))
@@ -360,7 +387,18 @@ class GameWindow(arcade.Window):
         self.fx_list.draw()
         # Barras de vida nos inimigos
         for e in self.enemy_list:
-            if getattr(e, 'max_hp', None):
+        if getattr(self, 'banner_timer', 0) > 0:
+            t = self.banner_timer
+            fade_in, fade_out, total = 0.3, 0.3, 3.0
+            a = 1.0
+            if t > total - fade_out:
+                a = max(0.0, (total - t) / fade_out)
+            elif t < fade_in:
+                a = max(0.0, t / fade_in)
+            alpha = int(255 * a)
+            btxt = self.banner_text or ""
+            arcade.Text(btxt, SCREEN_WIDTH//2 + 2, SCREEN_HEIGHT - 42, (0,0,0,alpha), 18, anchor_x="center").draw()
+            arcade.Text(btxt, SCREEN_WIDTH//2, SCREEN_HEIGHT - 40, (255,215,0,alpha), 18, anchor_x="center").draw()
                 w = 28
                 ratio = max(0.0, min(1.0, e.hp / e.max_hp))
                 x0 = e.center_x - w / 2
@@ -408,47 +446,30 @@ class GameWindow(arcade.Window):
         self.timer_text.color = arcade.color.WHITE if self.time_remaining > 30 else arcade.color.SALMON
         self.timer_text.draw()
 
-        # Tela de Game Over
-        if self.game_over:
-            if self.game_over_title is None:
-                self.game_over_title = arcade.Text(
-                    "GAME OVER",
-                    SCREEN_WIDTH // 2 - 140,
-                    SCREEN_HEIGHT // 2 + 80,
-                    arcade.color.WHITE,
-                    32,
-                )
-                self.game_over_prompt = arcade.Text(
-                    "Digite seu nome e pressione Enter:",
-                    SCREEN_WIDTH // 2 - 260,
-                    SCREEN_HEIGHT // 2 + 30,
-                    arcade.color.ANTIQUE_WHITE,
-                    20,
-                )
-                self.game_over_name = arcade.Text(
-                    self.input_name,
-                    SCREEN_WIDTH // 2 - 260,
-                    SCREEN_HEIGHT // 2 - 10,
-                    arcade.color.YELLOW,
-                    20,
-                )
-                self.final_score_text = arcade.Text(
-                    f"Score: {self.score}",
-                    SCREEN_WIDTH // 2 - 260,
-                    SCREEN_HEIGHT // 2 - 50,
-                    arcade.color.LIGHT_GREEN,
-                    20,
-                )
-            # Fundo translÃºcido
+        # Overlays de fim com Top 5
+        if self.state in ('victory', 'game_over'):
             arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (0, 0, 0, 150))
-            self.game_over_title.draw()
-            self.game_over_prompt.draw()
-            self.game_over_name.text = self.input_name + "_"
-            self.game_over_name.draw()
-            self.final_score_text.text = f"Score: {self.score}"
-            self.final_score_text.draw()
-
+            title = "VOCÊ VENCEU!" if self.state == 'victory' else "GAME OVER"
+            arcade.draw_text(title, SCREEN_WIDTH // 2 - 160, SCREEN_HEIGHT // 2 + 140, arcade.color.WHITE, 32)
+            arcade.draw_text("Top 5 Scores:", SCREEN_WIDTH // 2 - 120, SCREEN_HEIGHT // 2 + 100, arcade.color.ANTI_FLASH_WHITE, 20)
+            y = SCREEN_HEIGHT // 2 + 70
+            for i, (nm, sc) in enumerate(self.top_scores[:5], start=1):
+                col = arcade.color.GOLD if i == 1 else arcade.color.WHITE
+                arcade.draw_text(f"{i}. {nm} - {sc}", SCREEN_WIDTH // 2 - 120, y, col, 18)
+                y -= 24
+            arcade.draw_text("Pressione ENTER para voltar ao título", SCREEN_WIDTH // 2 - 220, SCREEN_HEIGHT // 2 - 60, arcade.color.LIGHT_GRAY, 16)
     def on_update(self, delta_time: float):
+        # Estados que não atualizam o mundo
+        if self.state != 'playing':
+            if getattr(self, 'banner_timer', 0) > 0:
+                self.banner_timer -= delta_time
+            return
+
+        # Estados que não atualizam o mundo
+        if self.state != 'playing':
+            if getattr(self, 'banner_timer', 0) > 0:
+                self.banner_timer -= delta_time
+            return
         # Movimento por teclas
         self.player.change_x = 0
         if self.left_pressed and not self.right_pressed:
@@ -663,10 +684,26 @@ class GameWindow(arcade.Window):
         # Banner
         if getattr(self, 'banner_timer', 0) > 0:
             self.banner_timer -= delta_time
-        # Coleta de pickups (coraÃ§Ãµes)
-
 
     def on_key_press(self, key, modifiers):
+        # Entrada na tela de título
+        if self.state == 'title':
+            if key == arcade.key.ENTER:
+                self.player_name = (self.player_name or 'Player').strip()[:16]
+                try:
+                    self.save_profile(self.player_name)
+                except Exception:
+                    pass
+                self.state = 'playing'
+                self.setup()
+                return
+            elif key == arcade.key.BACKSPACE:
+                self.player_name = self.player_name[:-1]
+                return
+            elif key == arcade.key.ESCAPE:
+                self.close()
+                return
+
         if self.game_over:
             if key == arcade.key.ENTER:
                 self.save_score(self.input_name.strip() or "Player", self.score)
@@ -691,6 +728,7 @@ class GameWindow(arcade.Window):
                 self.enemies_hit = set()
         elif key == arcade.key.ESCAPE:
             self.close()
+
     def on_key_release(self, key, modifiers):
         if key == arcade.key.LEFT:
             self.left_pressed = False
@@ -698,6 +736,10 @@ class GameWindow(arcade.Window):
             self.right_pressed = False
 
     def on_text(self, text: str):
+        if self.state == 'title':
+            if len(text) == 1 and text.isprintable() and len(self.player_name) < 16:
+                self.player_name += text
+            return
         if self.game_over:
             if len(text) == 1 and text.isprintable() and len(self.input_name) < 16:
                 self.input_name += text
@@ -718,14 +760,59 @@ class GameWindow(arcade.Window):
         chest.is_chest = True
         self.pickup_list.append(chest)
 
+        # --- Persistência (SQLite + fallback em arquivo) ---
+    def ensure_db(self):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)")
+            cur.execute("CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY AUTOINCREMENT, player_name TEXT, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+            conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def save_profile(self, name: str):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("INSERT OR IGNORE INTO players(name) VALUES (?)", (name.strip() or 'Player',))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def record_score(self, name: str, score: int):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("INSERT INTO scores(player_name, score) VALUES (?, ?)", (name.strip() or 'Player', int(score)))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_top_scores(self, limit: int = 5):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("SELECT player_name, MAX(score) as s FROM scores GROUP BY player_name ORDER BY s DESC LIMIT ?", (limit,))
+            return cur.fetchall()
+        except Exception:
+            return []
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     def save_score(self, name: str, score: int):
+        # Fallback em arquivo (além do SQLite)
         try:
             with open("scores.txt", "a", encoding="utf-8") as f:
                 f.write(f"{name};{score}\n")
         except Exception:
             pass
-
-
 def main():
     GameWindow()
     arcade.run()
@@ -733,6 +820,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
 
 
