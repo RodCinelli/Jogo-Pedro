@@ -4,6 +4,10 @@ import math
 import sqlite3
 import os
 import time
+import io
+import wave
+from array import array
+import pyglet
 from assets.sprites import (
     make_warrior_textures,
     make_ground_texture,
@@ -26,7 +30,7 @@ from assets.sprites import (
 # ConfiguraÃ§Ãµes bÃ¡sicas
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
-SCREEN_TITLE = "Rogue Platformer"
+SCREEN_TITLE = "Warrior Platform"
 
 PLAYER_MOVE_SPEED = 4.0
 PLAYER_JUMP_SPEED = 12.0
@@ -102,7 +106,11 @@ class GameWindow(arcade.Window):
         self.wall_list = arcade.SpriteList(use_spatial_hash=True)
         self.enemy_list = arcade.SpriteList()
         self.pickup_list = arcade.SpriteList()
+        # Recria listas visuais do céu/clima para não sobrar sprites entre partidas
         self.clouds = arcade.SpriteList()
+        self.sky_list = arcade.SpriteList()
+        self.rain_list = arcade.SpriteList()
+        self.bolt_list = arcade.SpriteList()
         self.score = 0
         self.score_text = arcade.Text("Score: 0", 10, self.height - 30, arcade.color.WHITE, 16)
         # Timer de 5 minutos
@@ -121,10 +129,13 @@ class GameWindow(arcade.Window):
         self.game_over_title = None
         self.game_over_prompt = None
         # Clima
-        self.weather = random.choice(['sunny', 'cloudy', 'night', 'rain'])
+        # day_sunny | day_cloudy | day_rain | night_clear | night_cloudy | night_rain
+        self.weather = random.choice(['day_sunny', 'day_cloudy', 'day_rain', 'night_clear', 'night_cloudy', 'night_rain'])
         self.sky_color = (50, 70, 110)
         self.lightning_flash = 0.0
         self.lightning_cd = 0.0
+        # SFX (efeitos) – inicializados em init_sfx()
+        self.sfx = {}
 
         # ChÃ£o
         ground_tex = make_ground_texture(SCREEN_WIDTH, 40)
@@ -137,72 +148,83 @@ class GameWindow(arcade.Window):
 
         # Configuração do clima e céu (nuvens, sol/lua, chuva)
         # Cores básicas do céu por clima
-        if self.weather == 'sunny':
-            self.sky_color = (100, 140, 200)
-        elif self.weather == 'cloudy':
-            self.sky_color = (70, 90, 130)
-        elif self.weather == 'night':
-            self.sky_color = (22, 26, 40)
-        else:  # rain
-            self.sky_color = (60, 80, 110)
+        if self.weather.startswith('day_'):
+            # dia
+            if self.weather == 'day_sunny':
+                self.sky_color = (100, 140, 200)
+            elif self.weather == 'day_cloudy':
+                self.sky_color = (70, 90, 130)
+            else:  # day_rain
+                self.sky_color = (60, 80, 110)
+        else:
+            # noite
+            if self.weather == 'night_clear':
+                self.sky_color = (18, 22, 34)
+            elif self.weather == 'night_cloudy':
+                self.sky_color = (22, 26, 40)
+            else:  # night_rain
+                self.sky_color = (20, 24, 36)
 
         # Nuvens (espalhadas e ajustadas pelo clima)
-        num_cols = 8
-        margin_x = 140
-        x_step = (SCREEN_WIDTH - 2 * margin_x) / (num_cols - 1)
-        y_rows = [SCREEN_HEIGHT - 200, SCREEN_HEIGHT - 160, SCREEN_HEIGHT - 240, SCREEN_HEIGHT - 120]
-        for i in range(num_cols):
-            w = random.randint(120, 240)
-            h = random.randint(50, 90)
-            cloud = arcade.Sprite()
-            base_alpha = 210
-            if self.weather == 'sunny':
-                base_alpha = random.randint(150, 210)
-            elif self.weather == 'cloudy':
-                base_alpha = random.randint(210, 245)
-            elif self.weather == 'night':
-                base_alpha = random.randint(110, 165)
-            elif self.weather == 'rain':
-                base_alpha = random.randint(180, 210)
-            cloud.texture = make_cloud_texture(w, h, alpha=base_alpha)
-            jitter = random.randint(-30, 30)
-            cloud.center_x = int(margin_x + i * x_step + jitter)
-            cloud.center_y = y_rows[i % len(y_rows)] + random.randint(-15, 15)
-            # Em dia ensolarado esconda algumas
-            if self.weather == 'sunny' and random.random() < 0.4:
-                cloud.alpha = 0
-            self.clouds.append(cloud)
+        generate_clouds = self.weather in ('day_cloudy', 'day_rain', 'night_cloudy', 'night_rain')
+        if generate_clouds:
+            num_cols = 8
+            margin_x = 140
+            x_step = (self.width - 2 * margin_x) / (num_cols - 1)
+            y_rows = [self.height - 200, self.height - 160, self.height - 240, self.height - 120]
+            for i in range(num_cols):
+                w = random.randint(120, 240)
+                h = random.randint(50, 90)
+                cloud = arcade.Sprite()
+                base_alpha = 210
+                if self.weather == 'day_cloudy':
+                    base_alpha = random.randint(210, 245)
+                elif self.weather == 'night_cloudy':
+                    base_alpha = random.randint(110, 165)
+                elif self.weather.endswith('rain'):
+                    base_alpha = random.randint(180, 210)
+                cloud.texture = make_cloud_texture(w, h, alpha=base_alpha)
+                jitter = random.randint(-30, 30)
+                cloud.center_x = int(margin_x + i * x_step + jitter)
+                cloud.center_y = y_rows[i % len(y_rows)] + random.randint(-15, 15)
+                self.clouds.append(cloud)
 
         # Sol/Lua/Estrelas/Raindrops
-        if self.weather == 'sunny':
+        if self.weather == 'day_sunny':
             sun = arcade.Sprite()
             sun.texture = make_sun_texture(72)
-            sun.center_x = SCREEN_WIDTH - 120
-            sun.center_y = SCREEN_HEIGHT - 120
+            sun.center_x = self.width - 120
+            sun.center_y = self.height - 120
             self.sky_list.append(sun)
-        elif self.weather == 'night':
+        elif self.weather == 'night_clear':
             moon = arcade.Sprite()
             moon.texture = make_moon_texture(58)
-            moon.center_x = SCREEN_WIDTH - 160
-            moon.center_y = SCREEN_HEIGHT - 140
+            moon.center_x = self.width - 160
+            moon.center_y = self.height - 140
             self.sky_list.append(moon)
             # estrelas
             for _ in range(40):
                 st = arcade.Sprite()
                 st.texture = make_star_texture(random.randint(2, 3))
-                st.center_x = random.randint(10, SCREEN_WIDTH - 10)
-                st.center_y = random.randint(int(SCREEN_HEIGHT * 0.6), SCREEN_HEIGHT - 10)
+                st.center_x = random.randint(10, self.width - 10)
+                st.center_y = random.randint(int(self.height * 0.6), self.height - 10)
                 st.alpha = random.randint(160, 230)
                 self.sky_list.append(st)
-        elif self.weather == 'rain':
+        elif self.weather == 'night_cloudy':
+            moon = arcade.Sprite()
+            moon.texture = make_moon_texture(58)
+            moon.center_x = self.width - 160
+            moon.center_y = self.height - 140
+            self.sky_list.append(moon)
+        if self.weather.endswith('rain'):
             # gotas de chuva
-            drops = int(180 * (SCREEN_WIDTH / 1920))
+            drops = int(220 * (self.width / 1920))
             drop_tex = make_raindrop_texture(2, 10)
             for _ in range(drops):
                 d = arcade.Sprite()
                 d.texture = drop_tex
-                d.center_x = random.randint(0, SCREEN_WIDTH)
-                d.center_y = random.randint(260, SCREEN_HEIGHT)
+                d.center_x = random.randint(0, self.width)
+                d.center_y = random.randint(260, self.height)
                 d.speed = random.uniform(260, 420)
                 d.wind = random.uniform(-20, 20)
                 self.rain_list.append(d)
@@ -476,9 +498,14 @@ class GameWindow(arcade.Window):
         arcade.draw_lrbt_rectangle_filled(0, self.width, 0, 260, (60, 90, 70))
         self.sky_list.draw()
         self.clouds.draw()
-        if self.weather == 'rain':
+        if self.weather.endswith('rain'):
             self.rain_list.draw()
             self.bolt_list.draw()
+            # Flash branco rápido simulando relâmpago
+            if getattr(self, 'lightning_flash', 0.0) > 0.0:
+                a = max(0, min(255, int(180 * (self.lightning_flash / 0.15))))
+                if a > 0:
+                    arcade.draw_lrbt_rectangle_filled(0, self.width, 0, self.height, (255, 255, 255, a))
 
         self.wall_list.draw()
         self.enemy_list.draw()
@@ -687,6 +714,7 @@ class GameWindow(arcade.Window):
                 dmg = getattr(e, 'contact_damage', 1.0)
                 self.player_hp = max(0.0, self.player_hp - float(dmg))
                 self.player_invuln = PLAYER_INVULN
+                self.play_sfx('hurt', 0.4)
                 # knockback
                 push = 14 if self.player.center_x < e.center_x else -14
                 self.player.center_x += push
@@ -782,6 +810,7 @@ class GameWindow(arcade.Window):
                 self.fx_list.append(fx)
                 self.banner_text = "Super Espada Adquirida! Dobro de dano ativado!"
                 self.banner_timer = 3.0
+                self.play_sfx('powerup', 0.55)
                 item.remove_from_sprite_lists()
 
         # Banner
@@ -789,7 +818,7 @@ class GameWindow(arcade.Window):
             self.banner_timer -= delta_time
 
         # --- Clima dinâmico ---
-        if self.weather == 'rain':
+        if self.weather.endswith('rain'):
             # movimento das gotas
             for d in self.rain_list:
                 d.center_y -= d.speed * delta_time
@@ -868,6 +897,7 @@ class GameWindow(arcade.Window):
                 self.is_attacking = True
                 self.attack_time = ATTACK_DURATION
                 self.enemies_hit = set()
+                self.play_sfx('attack', 0.5)
         elif key == arcade.key.ESCAPE:
             self.close()
 
@@ -923,6 +953,81 @@ class GameWindow(arcade.Window):
         self.game_over = (status == 'game_over')
         # Para o banner caso esteja ativo
         self.banner_timer = 0.0
+        # Final de jogo: sem ações adicionais de áudio
+
+    # --- Efeitos sonoros (SFX) ---
+    def init_sfx(self):
+        self.sfx = {
+            'attack': self._make_sfx_attack(),
+            'hurt': self._make_sfx_hurt(),
+            'powerup': self._make_sfx_powerup(),
+        }
+
+    def play_sfx(self, name: str, volume: float = 0.4):
+        src = self.sfx.get(name)
+        if not src:
+            return
+        try:
+            player = pyglet.media.Player()
+            player.volume = volume
+            player.queue(src)
+            player.play()
+        except Exception:
+            pass
+
+    def _make_pcm(self, samples: array, rate: int = 22050):
+        bio = io.BytesIO()
+        with wave.open(bio, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(rate)
+            wf.writeframes(samples.tobytes())
+        bio.seek(0)
+        try:
+            return pyglet.media.load('sfx.wav', file=bio, streaming=False)
+        except Exception:
+            return None
+
+    def _make_sfx_attack(self):
+        rate = 22050
+        dur = 0.18
+        n = int(rate * dur)
+        buf = array('h', [0] * n)
+        for i in range(n):
+            t = i / rate
+            f = 220 + 880 * (1 - t / dur)
+            env = max(0.0, 1.0 - t / dur)
+            v = int(3000 * env * math.sin(2 * math.pi * f * t))
+            buf[i] = v
+        return self._make_pcm(buf, rate)
+
+    def _make_sfx_hurt(self):
+        rate = 22050
+        dur = 0.15
+        n = int(rate * dur)
+        buf = array('h', [0] * n)
+        noise = 0.4
+        for i in range(n):
+            t = i / rate
+            f = 160
+            env = max(0.0, 1.0 - t / dur)
+            s = math.sin(2 * math.pi * f * t)
+            v = int(2500 * env * (0.6 * s + noise * (random.random() * 2 - 1)))
+            buf[i] = v
+        return self._make_pcm(buf, rate)
+
+    def _make_sfx_powerup(self):
+        rate = 22050
+        dur = 0.35
+        n = int(rate * dur)
+        buf = array('h', [0] * n)
+        for i in range(n):
+            t = i / rate
+            f = 600 + 900 * (t / dur)
+            env = 0.6 if t < dur * 0.7 else 0.6 * (1 - (t - dur * 0.7) / (dur * 0.3))
+            v = int(2500 * max(0.0, env) * math.sin(2 * math.pi * f * t))
+            buf[i] = v
+        return self._make_pcm(buf, rate)
 
     # --- Entradas de mouse para tela inicial ---
     def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
@@ -943,6 +1048,8 @@ class GameWindow(arcade.Window):
             pass
         self.state = 'playing'
         self.setup()
+        # Sons do jogo (ataque, dano, powerup)
+        self.init_sfx()
 
         # --- Persistência (SQLite + fallback em arquivo) ---
     def ensure_db(self):
