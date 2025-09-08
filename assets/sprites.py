@@ -23,16 +23,20 @@ def make_warrior_textures():
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
 
-        # Bota/canela
-        d.rectangle([16, 12, 22, 18], fill=boot)
-        d.rectangle([26, 12, 32, 18], fill=boot)
-        # Pernas (levemente alternadas)
-        if leg_phase in (0, 2):
-            d.rectangle([16, 18, 22, 28], fill=armor_dark)
-            d.rectangle([26, 18, 32, 26], fill=armor_dark)
+        # Pernas e botas com passada alternada mais evidente
+        left_forward = leg_phase in (0, 2)
+        lx0, lx1 = 16, 22
+        rx0, rx1 = 26, 32
+        if left_forward:
+            d.rectangle([lx0 + 1, 16, lx1 + 1, 28], fill=armor_dark)
+            d.rectangle([rx0 - 1, 18, rx1 - 1, 24], fill=armor_dark)
+            d.rectangle([16 + 1, 12, 22 + 1, 18], fill=boot)
+            d.rectangle([26 - 1, 12, 32 - 1, 18], fill=boot)
         else:
-            d.rectangle([16, 18, 22, 26], fill=armor_dark)
-            d.rectangle([26, 18, 32, 28], fill=armor_dark)
+            d.rectangle([lx0 + 1, 18, lx1 + 1, 24], fill=armor_dark)
+            d.rectangle([rx0 - 1, 16, rx1 - 1, 28], fill=armor_dark)
+            d.rectangle([16 - 1, 12, 22 - 1, 18], fill=boot)
+            d.rectangle([26 + 1, 12, 32 + 1, 18], fill=boot)
 
         # Tronco/peitoral
         d.rectangle([14, 28, 34, 46], fill=armor)
@@ -313,10 +317,11 @@ def make_goblin_textures(base=(60, 170, 90, 255)):
     def frame(phase: int):
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
-        # Pernas alternadas
+        # Pernas alternadas com leve deslocamento horizontal
         leg_shift = [0, 2, 0, 2][phase % 4]
-        d.rectangle([10, 2, 14, 10 + leg_shift], fill=dark)
-        d.rectangle([22, 2, 26, 10 + (2 - leg_shift)], fill=dark)
+        off = 1 if phase % 2 == 0 else -1
+        d.rectangle([10 + off, 2, 14 + off, 10 + leg_shift], fill=dark)
+        d.rectangle([22 - off, 2, 26 - off, 10 + (2 - leg_shift)], fill=dark)
         # Tronco
         d.rectangle([8, 10, 28, 28], fill=body, outline=dark)
         # Cinto
@@ -378,10 +383,11 @@ def make_orc_textures(base=(200, 70, 70, 255)):
     def frame(phase: int):
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
-        # Pernas alternadas
+        # Pernas alternadas com leve deslocamento horizontal
         leg_shift = [0, 2, 0, 2][phase % 4]
-        d.rectangle([12, 2, 16, 12 + leg_shift], fill=dark)
-        d.rectangle([24, 2, 28, 12 + (2 - leg_shift)], fill=dark)
+        off = 1 if phase % 2 == 0 else -1
+        d.rectangle([12 + off, 2, 16 + off, 12 + leg_shift], fill=dark)
+        d.rectangle([24 - off, 2, 28 - off, 12 + (2 - leg_shift)], fill=dark)
         # Tronco robusto
         d.rectangle([8, 12, 32, 32], fill=body, outline=dark)
         # Cinto
