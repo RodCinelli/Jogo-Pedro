@@ -56,6 +56,7 @@ class GameWindow(arcade.Window):
         self.physics_engine = None
         self.score = 0
         self.score_text = None
+        self.timer_text = None
         self.player_max_hp = PLAYER_MAX_HP
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
@@ -88,6 +89,10 @@ class GameWindow(arcade.Window):
         self.clouds = arcade.SpriteList()
         self.score = 0
         self.score_text = arcade.Text("Score: 0", 10, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
+        # Timer de 5 minutos
+        self.time_limit = 300.0
+        self.time_remaining = self.time_limit
+        self.timer_text = arcade.Text("Tempo: 05:00", SCREEN_WIDTH - 170, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
         self.player_damage = 1
@@ -396,6 +401,12 @@ class GameWindow(arcade.Window):
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w / 2, y0, y0 + heart_h, (220, 60, 80))
         self.score_text.text = f"Score: {self.score}"
         self.score_text.draw()
+        # Timer (mm:ss)
+        t = max(0, int(self.time_remaining))
+        mm, ss = divmod(t, 60)
+        self.timer_text.text = f"Tempo: {mm:02d}:{ss:02d}"
+        self.timer_text.color = arcade.color.WHITE if self.time_remaining > 30 else arcade.color.SALMON
+        self.timer_text.draw()
 
         # Tela de Game Over
         if self.game_over:
@@ -449,6 +460,16 @@ class GameWindow(arcade.Window):
 
         # FÃ­sica do jogador
         self.physics_engine.update()
+
+        # Timer: perde se acabar o tempo com inimigos restantes
+        if not self.game_over:
+            self.time_remaining = max(0.0, self.time_remaining - delta_time)
+            if self.time_remaining <= 0.0 and len(self.enemy_list) > 0:
+                self.game_over = True
+
+        if self.game_over:
+            return
+
 
         # Impede o jogador de sair pela esquerda/direita da tela
         if self.player.left < 0:
@@ -712,6 +733,8 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
 
 
