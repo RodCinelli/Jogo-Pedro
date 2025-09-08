@@ -16,6 +16,11 @@ from assets.sprites import (
     make_goblin_textures,
     make_cloud_texture,
     make_sword_fx_texture,
+    make_sun_texture,
+    make_moon_texture,
+    make_star_texture,
+    make_raindrop_texture,
+    make_lightning_texture,
 )
 
 # ConfiguraÃ§Ãµes bÃ¡sicas
@@ -53,6 +58,9 @@ class GameWindow(arcade.Window):
         self.enemy_list = arcade.SpriteList()
         self.pickup_list = arcade.SpriteList()
         self.clouds = arcade.SpriteList()
+        self.sky_list = arcade.SpriteList()
+        self.rain_list = arcade.SpriteList()
+        self.bolt_list = arcade.SpriteList()
         self.fx_list = arcade.SpriteList()
 
         self.player = arcade.Sprite()
@@ -112,6 +120,11 @@ class GameWindow(arcade.Window):
         self.input_name = ""
         self.game_over_title = None
         self.game_over_prompt = None
+        # Clima
+        self.weather = random.choice(['sunny', 'cloudy', 'night', 'rain'])
+        self.sky_color = (50, 70, 110)
+        self.lightning_flash = 0.0
+        self.lightning_cd = 0.0
 
         # ChÃ£o
         ground_tex = make_ground_texture(SCREEN_WIDTH, 40)
@@ -122,22 +135,77 @@ class GameWindow(arcade.Window):
         self.wall_list.append(ground)
         self.ground_top = ground.top
 
-        # Nuvens no ceu (espalhadas uniformemente e mais altas)
+        # Configuração do clima e céu (nuvens, sol/lua, chuva)
+        # Cores básicas do céu por clima
+        if self.weather == 'sunny':
+            self.sky_color = (100, 140, 200)
+        elif self.weather == 'cloudy':
+            self.sky_color = (70, 90, 130)
+        elif self.weather == 'night':
+            self.sky_color = (22, 26, 40)
+        else:  # rain
+            self.sky_color = (60, 80, 110)
+
+        # Nuvens (espalhadas e ajustadas pelo clima)
         num_cols = 8
         margin_x = 140
         x_step = (SCREEN_WIDTH - 2 * margin_x) / (num_cols - 1)
-        # linhas perto do topo da tela
         y_rows = [SCREEN_HEIGHT - 200, SCREEN_HEIGHT - 160, SCREEN_HEIGHT - 240, SCREEN_HEIGHT - 120]
         for i in range(num_cols):
             w = random.randint(120, 240)
             h = random.randint(50, 90)
             cloud = arcade.Sprite()
-            cloud.texture = make_cloud_texture(w, h, alpha=random.randint(190, 235))
-            # Distribui uniformemente no eixo X e alterna linhas de Y
+            base_alpha = 210
+            if self.weather == 'sunny':
+                base_alpha = random.randint(150, 210)
+            elif self.weather == 'cloudy':
+                base_alpha = random.randint(210, 245)
+            elif self.weather == 'night':
+                base_alpha = random.randint(110, 165)
+            elif self.weather == 'rain':
+                base_alpha = random.randint(180, 210)
+            cloud.texture = make_cloud_texture(w, h, alpha=base_alpha)
             jitter = random.randint(-30, 30)
             cloud.center_x = int(margin_x + i * x_step + jitter)
             cloud.center_y = y_rows[i % len(y_rows)] + random.randint(-15, 15)
+            # Em dia ensolarado esconda algumas
+            if self.weather == 'sunny' and random.random() < 0.4:
+                cloud.alpha = 0
             self.clouds.append(cloud)
+
+        # Sol/Lua/Estrelas/Raindrops
+        if self.weather == 'sunny':
+            sun = arcade.Sprite()
+            sun.texture = make_sun_texture(72)
+            sun.center_x = SCREEN_WIDTH - 120
+            sun.center_y = SCREEN_HEIGHT - 120
+            self.sky_list.append(sun)
+        elif self.weather == 'night':
+            moon = arcade.Sprite()
+            moon.texture = make_moon_texture(58)
+            moon.center_x = SCREEN_WIDTH - 160
+            moon.center_y = SCREEN_HEIGHT - 140
+            self.sky_list.append(moon)
+            # estrelas
+            for _ in range(40):
+                st = arcade.Sprite()
+                st.texture = make_star_texture(random.randint(2, 3))
+                st.center_x = random.randint(10, SCREEN_WIDTH - 10)
+                st.center_y = random.randint(int(SCREEN_HEIGHT * 0.6), SCREEN_HEIGHT - 10)
+                st.alpha = random.randint(160, 230)
+                self.sky_list.append(st)
+        elif self.weather == 'rain':
+            # gotas de chuva
+            drops = int(180 * (SCREEN_WIDTH / 1920))
+            drop_tex = make_raindrop_texture(2, 10)
+            for _ in range(drops):
+                d = arcade.Sprite()
+                d.texture = drop_tex
+                d.center_x = random.randint(0, SCREEN_WIDTH)
+                d.center_y = random.randint(260, SCREEN_HEIGHT)
+                d.speed = random.uniform(260, 420)
+                d.wind = random.uniform(-20, 20)
+                self.rain_list.append(d)
 
         # Plataforma simples
         plat_tex = make_platform_texture(220, 20)
@@ -404,9 +472,13 @@ class GameWindow(arcade.Window):
             return
 
         # CÃ©u simples
-        arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 260, SCREEN_HEIGHT, (50, 70, 110))
-        arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, 260, (60, 90, 70))
+        arcade.draw_lrbt_rectangle_filled(0, self.width, 260, self.height, self.sky_color)
+        arcade.draw_lrbt_rectangle_filled(0, self.width, 0, 260, (60, 90, 70))
+        self.sky_list.draw()
         self.clouds.draw()
+        if self.weather == 'rain':
+            self.rain_list.draw()
+            self.bolt_list.draw()
 
         self.wall_list.draw()
         self.enemy_list.draw()
@@ -716,6 +788,38 @@ class GameWindow(arcade.Window):
         if getattr(self, 'banner_timer', 0) > 0:
             self.banner_timer -= delta_time
 
+        # --- Clima dinâmico ---
+        if self.weather == 'rain':
+            # movimento das gotas
+            for d in self.rain_list:
+                d.center_y -= d.speed * delta_time
+                d.center_x += d.wind * delta_time
+                if d.center_y < 260:
+                    d.center_y = self.height + random.randint(0, 80)
+                    d.center_x = random.randint(0, self.width)
+            # relâmpagos ocasionais
+            if self.lightning_cd > 0:
+                self.lightning_cd -= delta_time
+            else:
+                if random.random() < 0.02:
+                    bolt = arcade.Sprite()
+                    bolt.texture = make_lightning_texture(8, 140)
+                    bolt.center_x = random.randint(120, self.width - 120)
+                    bolt.center_y = random.randint(int(self.height * 0.7), self.height - 40)
+                    bolt.alpha = 255
+                    bolt.life = 0.0
+                    self.bolt_list.append(bolt)
+                    self.lightning_flash = 0.15
+                    self.lightning_cd = 2.5
+            # atenua/some com raios
+            for b in list(self.bolt_list):
+                b.life += delta_time
+                b.alpha = max(0, int(255 * (1.0 - b.life / 0.2)))
+                if b.life >= 0.2:
+                    b.remove_from_sprite_lists()
+            if self.lightning_flash > 0:
+                self.lightning_flash = max(0.0, self.lightning_flash - delta_time)
+
     def on_key_press(self, key, modifiers):
         # Entrada na tela de título
         if self.state == 'title':
@@ -900,6 +1004,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
