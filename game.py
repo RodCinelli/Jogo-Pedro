@@ -477,11 +477,15 @@ class GameWindow(arcade.Window):
                             self.spawn_heart(e.center_x, e.center_y + 18)
                     e.remove_from_sprite_lists()
                     continue
-                # anim de morte
-                e.facing_right = e.change_x >= 0
-                idx = min(int(e.death_timer / 0.15), 2)
-                key = "die_right" if e.facing_right else "die_left"
-                e.texture = e.enemy_tex[key][idx]
+                # animação de morte
+                if e.type in ("slime", "goblin", "orc"):
+                    e.facing_right = e.change_x >= 0
+                    idx = min(int(e.death_timer / 0.15), 2)
+                    key = "die_right" if e.facing_right else "die_left"
+                    e.texture = e.enemy_tex[key][idx]
+                else:
+                    # morcego não tem frames de morte: esmaece enquanto mantém o voo
+                    e.alpha = max(0, int(255 * (1.0 - e.death_timer / 0.45)))
                 continue
 
             # Vivo: movimento
@@ -576,6 +580,12 @@ class GameWindow(arcade.Window):
                         h.hurt_timer = 0.25
                         h.center_x += 10 if self.facing_right else -10
 
+        # Animação do jogador (ciclo de frames)
+        self.anim_timer += delta_time
+        if self.anim_timer > 0.12:
+            self.anim_timer = 0.0
+            self.anim_index += 1
+
         state = "idle"
         if self.is_attacking:
             state = "attack"
@@ -591,6 +601,10 @@ class GameWindow(arcade.Window):
         else:
             idx = self.anim_index % len(frames)
         self.player.texture = frames[idx]
+
+        # Decai invulnerabilidade do jogador para permitir tomar dano novamente
+        if self.player_invuln > 0.0:
+            self.player_invuln = max(0.0, self.player_invuln - delta_time)
 
         # Atualiza efeitos visuais (espada do baú)
         for fx in list(self.fx_list):
