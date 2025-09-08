@@ -1,4 +1,4 @@
-import arcade
+﻿import arcade
 import random
 import math
 from assets.sprites import (
@@ -10,10 +10,11 @@ from assets.sprites import (
     make_heart_texture,
     make_chest_texture,
     make_orc_textures,
+    make_goblin_textures,
     make_cloud_texture,
 )
 
-# Configurações básicas
+# ConfiguraÃ§Ãµes bÃ¡sicas
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 SCREEN_TITLE = "Rogue Platformer"
@@ -23,10 +24,15 @@ PLAYER_JUMP_SPEED = 12.0
 GRAVITY = 0.6
 
 ENEMY_SPEED = 2.0
+# Velocidades por tipo (ajustadas)
+SLIME_SPEED = 1.4
+GOBLIN_SPEED = 2.2
+ORC_SPEED = 1.6
+BAT_SPEED = GOBLIN_SPEED + 0.4  # morcego um pouco mais rápido que goblin
 ATTACK_DURATION = 0.36
 ATTACK_HIT_START = 0.12
 ATTACK_HIT_END = 0.28
-PLAYER_MAX_HP = 5
+PLAYER_MAX_HP = 5  # em coraÃ§Ãµes, permite meio-coraÃ§Ã£o
 PLAYER_INVULN = 1.0
 ENEMY_CONTACT_DAMAGE = 1
 
@@ -49,7 +55,7 @@ class GameWindow(arcade.Window):
         self.score = 0
         self.score_text = None
         self.player_max_hp = PLAYER_MAX_HP
-        self.player_hp = self.player_max_hp
+        self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
         self.player_damage = 1
         self.game_over = False
@@ -65,7 +71,7 @@ class GameWindow(arcade.Window):
         self.anim_index = 0
         self.is_attacking = False
         self.attack_time = 0.0
-        self.attack_sprite = arcade.SpriteSolidColor(60, 36, (255, 255, 255, 1))  # hitbox invisível
+        self.attack_sprite = arcade.SpriteSolidColor(60, 36, (255, 255, 255, 1))  # hitbox invisÃ­vel
         self.enemies_hit = set()
 
         self.textures = make_warrior_textures()
@@ -80,7 +86,7 @@ class GameWindow(arcade.Window):
         self.clouds = arcade.SpriteList()
         self.score = 0
         self.score_text = arcade.Text("Score: 0", 10, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
-        self.player_hp = self.player_max_hp
+        self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
         self.player_damage = 1
         self.game_over = False
@@ -88,7 +94,7 @@ class GameWindow(arcade.Window):
         self.game_over_title = None
         self.game_over_prompt = None
 
-        # Chão
+        # ChÃ£o
         ground_tex = make_ground_texture(SCREEN_WIDTH, 40)
         ground = arcade.Sprite()
         ground.texture = ground_tex
@@ -124,32 +130,39 @@ class GameWindow(arcade.Window):
         self.wall_list.append(plat)
 
         # Escadas de plataformas (altura de pulo ~120px)
-        # Centralizadas em relação ao centro da tela. Distâncias pequenas para permitir pulos entre as superiores.
+        # Centralizadas em relaÃ§Ã£o ao centro da tela. DistÃ¢ncias pequenas para permitir pulos entre as superiores.
         stair_tex_w = 180
         stair_tex = make_platform_texture(stair_tex_w, 20)
         max_jump_px = int((PLAYER_JUMP_SPEED ** 2) / (2 * GRAVITY))
         step_h = int(max_jump_px * 0.78)
         center_x = SCREEN_WIDTH // 2
-        dxs = [180, 170]  # níveis 2 e 3 (superiores mais próximos para salto)
+        dxs = [180, 170]  # nÃ­veis 2 e 3 (superiores mais prÃ³ximos para salto)
         stairs_left = [(center_x - dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
         stairs_right = [(center_x + dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
+        # Guardar plataformas por andar (nÃ£o criar inimigos aqui)
+        row2_stairs = []
+        row3_stairs = []
         for x, y in stairs_left + stairs_right:
             p = arcade.Sprite()
             p.texture = stair_tex
             p.center_x = x
             p.center_y = y
             self.wall_list.append(p)
-            # Inimigo que anda sobre a plataforma (orc)
             patrol_min = x - (stair_tex_w // 2 - 10)
             patrol_max = x + (stair_tex_w // 2 - 10)
-            self.spawn_orc(x=x, y=p.top, min_x=patrol_min, max_x=patrol_max)
+            if y == ground.top + step_h * 2:
+                row2_stairs.append((x, p.top, patrol_min, patrol_max))
+            elif y == ground.top + step_h * 3:
+                row3_stairs.append((x, p.top, patrol_min, patrol_max))
 
-        # Plataformas extras para popular e espaçar mais a tela
+        # Plataformas extras para popular e espaÃ§ar mais a tela
         dx_base = 160
         extra_levels = [
             [-3 * dx_base, -1 * dx_base, 1 * dx_base, 3 * dx_base],
             [-2 * dx_base, 0, 2 * dx_base],
         ]
+        row1_extras = []
+        row2_extras = []
         for i, row in enumerate(extra_levels):
             y = ground.top + step_h * (i + 1)
             for dx in row:
@@ -161,9 +174,12 @@ class GameWindow(arcade.Window):
                 self.wall_list.append(ep)
                 patrol_min = ex - (stair_tex_w // 2 - 10)
                 patrol_max = ex + (stair_tex_w // 2 - 10)
-                self.spawn_orc(x=ex, y=ep.top, min_x=patrol_min, max_x=patrol_max)
+                if i == 0:
+                    row1_extras.append((ex, ep.top, patrol_min, patrol_max))
+                else:
+                    row2_extras.append((ex, ep.top, patrol_min, patrol_max))
 
-        # Baú do machado melhor na plataforma mais alta (direita)
+        # BaÃº do machado melhor na plataforma mais alta (direita)
         top_y = max(y for _, y in stairs_left + stairs_right)
         center_top = arcade.Sprite()
         center_top.texture = stair_tex
@@ -181,15 +197,37 @@ class GameWindow(arcade.Window):
         self.player.texture = self.textures["idle_right"][0]
         self.player_list.append(self.player)
 
-        # Física do jogador
+        # FÃ­sica do jogador
         self.physics_engine = arcade.PhysicsEnginePlatformer(self.player, self.wall_list, gravity_constant=GRAVITY)
 
         # Inimigos
-        # Slimes apenas no solo
+        # Solo: slimes (lentos, 0.5 coraÃ§Ã£o de dano)
         self.spawn_slime(x=400, y=ground.top, min_x=360, max_x=740)
         self.spawn_slime(x=900, y=ground.top, min_x=780, max_x=1150)
         self.spawn_slime(x=1400, y=ground.top, min_x=1260, max_x=1680)
-        # Morcegos voadores
+
+        # Primeiro andar (extras nÃ­vel 1): goblins
+        for x, top, mn, mx in row1_extras:
+            self.spawn_goblin(x=x, y=top, min_x=mn, max_x=mx)
+
+        # Segundo andar (extras nÃ­vel 2): 2 goblins nas pontas + 1 orc no centro
+        if row2_extras:
+            row2_sorted = sorted(row2_extras, key=lambda t: t[0])
+            # pontas -> goblins
+            gx, gt, gmn, gmx = row2_sorted[0]
+            self.spawn_goblin(x=gx, y=gt, min_x=gmn, max_x=gmx)
+            gx, gt, gmn, gmx = row2_sorted[-1]
+            self.spawn_goblin(x=gx, y=gt, min_x=gmn, max_x=gmx)
+            # centro -> orc
+            mid_idx = len(row2_sorted) // 2
+            ox, ot, omn, omx = row2_sorted[mid_idx]
+            self.spawn_orc(x=ox, y=ot, min_x=omn, max_x=omx)
+
+        # Ãšltima plataforma antes do baÃº (andares escada mais altos): 2 orcs
+        for x, top, mn, mx in row3_stairs:
+            self.spawn_orc(x=x, y=top, min_x=mn, max_x=mx)
+
+        # Morcegos: 3 voando sobre o topo, como antes
         self.spawn_bat(x=300, y=400, min_x=150, max_x=600)
         self.spawn_bat(x=900, y=520, min_x=780, max_x=1200)
         self.spawn_bat(x=1400, y=460, min_x=1200, max_x=1700)
@@ -201,7 +239,7 @@ class GameWindow(arcade.Window):
         enemy.texture = enemy_tex["walk_right"][0]
         enemy.center_x = x
         enemy.bottom = y
-        enemy.change_x = ENEMY_SPEED
+        enemy.change_x = SLIME_SPEED
         enemy.bound_left = min_x
         enemy.bound_right = max_x
         enemy.anim_timer = 0.0
@@ -215,6 +253,7 @@ class GameWindow(arcade.Window):
         enemy.dead = False
         enemy.death_timer = 0.0
         enemy.scored = False
+        enemy.contact_damage = 0.5
         self.enemy_list.append(enemy)
 
     def spawn_bat(self, x: float, y: float, min_x: float, max_x: float):
@@ -225,7 +264,7 @@ class GameWindow(arcade.Window):
         enemy.center_x = x
         enemy.center_y = y
         enemy.start_y = y
-        enemy.change_x = ENEMY_SPEED + 1.0
+        enemy.change_x = BAT_SPEED
         enemy.bound_left = min_x
         enemy.bound_right = max_x
         enemy.anim_timer = 0.0
@@ -243,6 +282,7 @@ class GameWindow(arcade.Window):
         enemy.diving = False
         enemy.dive_timer = 0.0
         enemy.dive_cooldown = 0.0
+        enemy.contact_damage = 1.0
         self.enemy_list.append(enemy)
 
     def spawn_goblin(self, x: float, y: float, min_x: float, max_x: float):
@@ -252,7 +292,7 @@ class GameWindow(arcade.Window):
         enemy.texture = enemy_tex["walk_right"][0]
         enemy.center_x = x
         enemy.bottom = y
-        enemy.change_x = ENEMY_SPEED + 0.5
+        enemy.change_x = GOBLIN_SPEED
         enemy.bound_left = min_x
         enemy.bound_right = max_x
         enemy.anim_timer = 0.0
@@ -265,6 +305,7 @@ class GameWindow(arcade.Window):
         enemy.dead = False
         enemy.death_timer = 0.0
         enemy.scored = False
+        enemy.contact_damage = 1.0
         self.enemy_list.append(enemy)
 
     def spawn_orc(self, x: float, y: float, min_x: float, max_x: float):
@@ -274,7 +315,7 @@ class GameWindow(arcade.Window):
         enemy.texture = enemy_tex["walk_right"][0]
         enemy.center_x = x
         enemy.bottom = y
-        enemy.change_x = ENEMY_SPEED + 0.6
+        enemy.change_x = ORC_SPEED
         enemy.bound_left = min_x
         enemy.bound_right = max_x
         enemy.anim_timer = 0.0
@@ -287,12 +328,13 @@ class GameWindow(arcade.Window):
         enemy.dead = False
         enemy.death_timer = 0.0
         enemy.scored = False
+        enemy.contact_damage = 1.5
         self.enemy_list.append(enemy)
 
     def on_draw(self):
         self.clear()
 
-        # Céu simples
+        # CÃ©u simples
         arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 260, SCREEN_HEIGHT, (50, 70, 110))
         arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, 260, (60, 90, 70))
         self.clouds.draw()
@@ -311,14 +353,19 @@ class GameWindow(arcade.Window):
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + w * ratio, y0, y0 + 4, (80, 220, 100))
         self.player_list.draw()
 
-        # Vida do jogador (corações simples)
+        # Vida do jogador (corações com meio-coração)
         heart_w, heart_h = 18, 12
+        full = int(self.player_hp)
+        has_half = (self.player_hp - full) >= 0.5
         for i in range(self.player_max_hp):
             x0 = 10 + i * (heart_w + 6)
             y0 = SCREEN_HEIGHT - 60
-            color = (220, 60, 80) if i < self.player_hp else (80, 70, 70)
-            arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w, y0, y0 + heart_h, color)
-
+            # base vazia
+            arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w, y0, y0 + heart_h, (80, 70, 70))
+            if i < full:
+                arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w, y0, y0 + heart_h, (220, 60, 80))
+            elif i == full and has_half:
+                arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w / 2, y0, y0 + heart_h, (220, 60, 80))
         self.score_text.text = f"Score: {self.score}"
         self.score_text.draw()
 
@@ -353,7 +400,7 @@ class GameWindow(arcade.Window):
                     arcade.color.LIGHT_GREEN,
                     20,
                 )
-            # Fundo translúcido
+            # Fundo translÃºcido
             arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (0, 0, 0, 150))
             self.game_over_title.draw()
             self.game_over_prompt.draw()
@@ -372,7 +419,7 @@ class GameWindow(arcade.Window):
             self.player.change_x = PLAYER_MOVE_SPEED
             self.facing_right = True
 
-        # Física do jogador
+        # FÃ­sica do jogador
         self.physics_engine.update()
 
         # Impede o jogador de sair pela esquerda/direita da tela
@@ -388,16 +435,16 @@ class GameWindow(arcade.Window):
         if self.game_over:
             return
 
-        # Atualiza inimigos (movimento ping-pong/voo + animação + vida)
+        # Atualiza inimigos (movimento ping-pong/voo + animaÃ§Ã£o + vida)
         for e in list(self.enemy_list):
-            # Mortos: tocar animação e remover
+            # Mortos: tocar animaÃ§Ã£o e remover
             if e.dead:
                 e.death_timer += delta_time
                 if e.death_timer > 0.45:
                     if not e.scored:
                         self.score += 100
                         e.scored = True
-                        # Drop de coração 30%
+                        # Drop de coraÃ§Ã£o 30%
                         if random.random() < 0.3:
                             self.spawn_heart(e.center_x, e.center_y + 18)
                     e.remove_from_sprite_lists()
@@ -415,15 +462,15 @@ class GameWindow(arcade.Window):
                 # Dive logic
                 if e.diving:
                     e.dive_timer += delta_time
-                    # Direção para o jogador
+                    # DireÃ§Ã£o para o jogador
                     dir_x = 1 if self.player.center_x > e.center_x else -1
                     e.change_x = (ENEMY_SPEED + 1.2) * dir_x
-                    # Desce mais lentamente até a altura do jogador
+                    # Desce mais lentamente atÃ© a altura do jogador
                     if e.center_y > self.player.center_y + 8:
                         e.center_y -= 4
                     else:
                         e.center_y += 1  # overshoot leve
-                    # Termina dive após tempo ou se passou do jogador
+                    # Termina dive apÃ³s tempo ou se passou do jogador
                     if e.dive_timer > 1.2 or abs(e.center_y - self.player.center_y) < 10:
                         e.diving = False
                         e.dive_cooldown = 2.5
@@ -438,7 +485,7 @@ class GameWindow(arcade.Window):
                     if e.dive_cooldown > 0:
                         e.dive_cooldown -= delta_time
                     else:
-                        # Só faz rasante se o jogador não estiver no chão
+                        # SÃ³ faz rasante se o jogador nÃ£o estiver no chÃ£o
                         player_on_ground = self.player.bottom <= self.ground_top + 6
                         if (not player_on_ground) and abs(self.player.center_x - e.center_x) < 240 and e.center_y > self.player.center_y + 40:
                             e.diving = True
@@ -474,16 +521,17 @@ class GameWindow(arcade.Window):
 
             # Dano de contato ao jogador
             if not e.dead and self.player_invuln <= 0 and arcade.check_for_collision(self.player, e):
-                self.player_hp = max(0, self.player_hp - ENEMY_CONTACT_DAMAGE)
+                dmg = getattr(e, 'contact_damage', 1.0)
+                self.player_hp = max(0.0, self.player_hp - float(dmg))
                 self.player_invuln = PLAYER_INVULN
                 # knockback
                 push = 14 if self.player.center_x < e.center_x else -14
                 self.player.center_x += push
-                if self.player_hp <= 0:
+                if self.player_hp <= 0.0:
                     self.game_over = True
                     return
 
-        # Ataque simples com hitbox na direção do guerreiro
+        # Ataque simples com hitbox na direÃ§Ã£o do guerreiro
         if self.is_attacking:
             self.attack_time -= delta_time
             progress = ATTACK_DURATION - self.attack_time
@@ -513,7 +561,7 @@ class GameWindow(arcade.Window):
         if self.player_invuln > 0:
             self.player_invuln -= delta_time
 
-        # Animação
+        # AnimaÃ§Ã£o
         self.anim_timer += delta_time
         if self.anim_timer > 0.12:
             self.anim_timer = 0
@@ -535,11 +583,11 @@ class GameWindow(arcade.Window):
             idx = self.anim_index % len(frames)
         self.player.texture = frames[idx]
 
-        # Coleta de pickups (corações)
+        # Coleta de pickups (coraÃ§Ãµes)
         for item in arcade.check_for_collision_with_list(self.player, self.pickup_list):
             if hasattr(item, 'is_heart') and item.is_heart:
-                if self.player_hp < self.player_max_hp:
-                    self.player_hp += 1
+                if self.player_hp < float(self.player_max_hp):
+                    self.player_hp = min(float(self.player_max_hp), self.player_hp + 1.0)
                 item.remove_from_sprite_lists()
             elif hasattr(item, 'is_chest') and item.is_chest:
                 self.player_damage = 2
@@ -613,3 +661,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

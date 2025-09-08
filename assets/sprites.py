@@ -82,7 +82,8 @@ def make_warrior_textures():
     ]
 
     def tex(name, img):
-        return arcade.Texture(name=name, image=img)
+        # Corrige orientação vertical (PIL usa origem no topo)
+        return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
         return ImageOps.mirror(img)
@@ -184,7 +185,7 @@ def make_slime_textures(base=(80, 200, 120, 255)):
     die = [shrink(walk[0], 0.8), shrink(walk[0], 0.55), shrink(walk[0], 0.3)]
 
     def tex(name, img):
-        return arcade.Texture(name=name, image=img)
+        return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
         return ImageOps.mirror(img)
@@ -225,7 +226,7 @@ def make_bat_textures(base=(150, 100, 200, 255)):
     fly = [frame(i) for i in range(4)]
 
     def tex(name, img):
-        return arcade.Texture(name=name, image=img)
+        return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
         return ImageOps.mirror(img)
@@ -287,7 +288,7 @@ def make_goblin_textures(base=(60, 170, 90, 255)):
     die = [shrink(walk[0], 0.8), shrink(walk[0], 0.55), shrink(walk[0], 0.3)]
 
     def tex(name, img):
-        return arcade.Texture(name=name, image=img)
+        return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
         return ImageOps.mirror(img)
@@ -353,7 +354,7 @@ def make_orc_textures(base=(200, 70, 70, 255)):
     die = [shrink(walk[0], 0.8), shrink(walk[0], 0.55), shrink(walk[0], 0.3)]
 
     def tex(name, img):
-        return arcade.Texture(name=name, image=img)
+        return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
         return ImageOps.mirror(img)
