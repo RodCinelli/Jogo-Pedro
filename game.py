@@ -452,7 +452,7 @@ class GameWindow(arcade.Window):
             arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (20, 20, 30))
             # Desloca levemente o container para a esquerda e um pouco para baixo
             offset_x = -int(SCREEN_WIDTH * 0.05)
-            offset_y = -int(SCREEN_HEIGHT * 0.08)
+            offset_y = -int(SCREEN_HEIGHT * 0.04)
             cx, cy = SCREEN_WIDTH // 2 + offset_x, SCREEN_HEIGHT // 2 + offset_y
 
             # Proporções responsivas
@@ -487,6 +487,21 @@ class GameWindow(arcade.Window):
             btn_gap = int(SCREEN_HEIGHT * 0.03)
             by0 = y0 - btn_gap - btn_h
             by1 = by0 + btn_h
+            # Manual de controles abaixo do botao
+            manual_size = max(14, int(prompt_size * 0.75))
+            # Espaçamento vertical entre as linhas do manual
+            line_gap = max(22, int(manual_size * 1.4))
+            # Distância do manual em relação ao botão
+            spacing = max(26, int(btn_h * 1.0))
+            base_y = by0 - spacing
+            controls = [
+                "Setas Esquerda/Direita: Mover",
+                "Barra de Espaco: Pular",
+                "Z ou Q: Atacar",
+                "ENTER: Iniciar   |   ESC: Sair",
+            ]
+            for i, txt in enumerate(controls):
+                arcade.Text(txt, cx, base_y - i * line_gap, arcade.color.LIGHT_GRAY, manual_size, anchor_x="center").draw()
             self.start_btn = (bx0, by0, bx1, by1)
             hover = getattr(self, 'mouse_x', None) is not None and bx0 <= self.mouse_x <= bx1 and by0 <= getattr(self, 'mouse_y', -1) <= by1
             btn_color = (80, 140, 90) if hover else (70, 120, 80)
@@ -861,7 +876,9 @@ class GameWindow(arcade.Window):
         # Entrada na tela de título
         if self.state == 'title':
             if key == arcade.key.ENTER:
-                self.start_game()
+                # Exige nome para iniciar
+                if (self.player_name or '').strip():
+                    self.start_game()
                 return
             elif key == arcade.key.BACKSPACE:
                 self.player_name = self.player_name[:-1]
@@ -1123,7 +1140,9 @@ class GameWindow(arcade.Window):
         if self.state == 'title' and getattr(self, 'start_btn', None):
             bx0, by0, bx1, by1 = self.start_btn
             if bx0 <= x <= bx1 and by0 <= y <= by1:
-                self.start_game()
+                # Exige nome para iniciar
+                if (self.player_name or '').strip():
+                    self.start_game()
 
     # --- Helpers ---
     def start_game(self):
