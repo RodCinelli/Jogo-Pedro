@@ -98,6 +98,8 @@ class GameWindow(arcade.Window):
         self.textures = make_warrior_textures()
         self.db_path = os.path.join(os.getcwd(), 'warrior_platform.db')
         # Inicializa banco (scores/perfis)
+        # Lista de players de SFX ativos para evitar GC precoce
+        self._sfx_players = []
         self.ensure_db()
         self.setup()
 
@@ -591,12 +593,15 @@ class GameWindow(arcade.Window):
         if self.state != 'playing':
             if getattr(self, 'banner_timer', 0) > 0:
                 self.banner_timer -= delta_time
+            # Clean up finished SFX players even when paused/end screens
+            self._cleanup_sfx_players()
             return
 
         # Estados que não atualizam o mundo
         if self.state != 'playing':
             if getattr(self, 'banner_timer', 0) > 0:
                 self.banner_timer -= delta_time
+            self._cleanup_sfx_players()
             return
         # Movimento por teclas
         self.player.change_x = 0
@@ -609,6 +614,8 @@ class GameWindow(arcade.Window):
 
         # FÃ­sica do jogador
         self.physics_engine.update()
+        # Limpa players de SFX finalizados
+        self._cleanup_sfx_players()
 
         # Timer: perde se acabar o tempo com inimigos restantes
         self.time_remaining = max(0.0, self.time_remaining - delta_time)
@@ -714,7 +721,7 @@ class GameWindow(arcade.Window):
                 dmg = getattr(e, 'contact_damage', 1.0)
                 self.player_hp = max(0.0, self.player_hp - float(dmg))
                 self.player_invuln = PLAYER_INVULN
-                self.play_sfx('hurt', 0.4)
+                self.play_sfx('hurt', 1.0)
                 # knockback
                 push = 14 if self.player.center_x < e.center_x else -14
                 self.player.center_x += push
@@ -794,6 +801,7 @@ class GameWindow(arcade.Window):
             if hasattr(item, 'is_heart') and item.is_heart:
                 if self.player_hp < float(self.player_max_hp):
                     self.player_hp = min(float(self.player_max_hp), self.player_hp + 1.0)
+                self.play_sfx('pickup', 1.0)
                 item.remove_from_sprite_lists()
             elif hasattr(item, 'is_chest') and item.is_chest:
                 # Upgrade de espada: dobra o dano e mostra efeitos
@@ -810,7 +818,7 @@ class GameWindow(arcade.Window):
                 self.fx_list.append(fx)
                 self.banner_text = "Super Espada Adquirida! Dobro de dano ativado!"
                 self.banner_timer = 3.0
-                self.play_sfx('powerup', 0.55)
+                self.play_sfx('powerup', 1.0)
                 item.remove_from_sprite_lists()
 
         # Banner
@@ -897,7 +905,7 @@ class GameWindow(arcade.Window):
                 self.is_attacking = True
                 self.attack_time = ATTACK_DURATION
                 self.enemies_hit = set()
-                self.play_sfx('attack', 0.5)
+                self.play_sfx('attack', 1.0)
         elif key == arcade.key.ESCAPE:
             self.close()
 
@@ -953,7 +961,14 @@ class GameWindow(arcade.Window):
         self.game_over = (status == 'game_over')
         # Para o banner caso esteja ativo
         self.banner_timer = 0.0
-        # Final de jogo: sem ações adicionais de áudio
+        # Sons finais por estado
+        try:
+            if status == 'game_over':
+                self.play_sfx('game_over', 1.0)
+            elif status == 'victory':
+                self.play_sfx('victory', 1.0)
+        except Exception:
+            pass
 
     # --- Efeitos sonoros (SFX) ---
     def init_sfx(self):
@@ -961,19 +976,41 @@ class GameWindow(arcade.Window):
             'attack': self._make_sfx_attack(),
             'hurt': self._make_sfx_hurt(),
             'powerup': self._make_sfx_powerup(),
+            'pickup': self._make_sfx_pickup(),
+            'game_over': self._make_sfx_game_over(),
+            'victory': self._make_sfx_victory(),
         }
 
-    def play_sfx(self, name: str, volume: float = 0.4):
+    def play_sfx(self, name: str, volume: float = 1.0):
         src = self.sfx.get(name)
         if not src:
             return
         try:
             player = pyglet.media.Player()
-            player.volume = volume
+            # Volume em escala 0.0 a 1.0 (100%)
+            player.volume = max(0.0, min(1.0, float(volume)))
             player.queue(src)
             player.play()
+            # Mant�m refer�ncia at� terminar para n�o cortar o som
+            self._sfx_players.append(player)
         except Exception:
             pass
+
+    def _cleanup_sfx_players(self):
+        # Remove players que j� finalizaram a reprodu��o
+        alive = []
+        for p in self._sfx_players:
+            try:
+                if getattr(p, 'playing', False):
+                    alive.append(p)
+                else:
+                    try:
+                        p.delete()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        self._sfx_players = alive
 
     def _make_pcm(self, samples: array, rate: int = 22050):
         bio = io.BytesIO()
@@ -1028,6 +1065,55 @@ class GameWindow(arcade.Window):
             v = int(2500 * max(0.0, env) * math.sin(2 * math.pi * f * t))
             buf[i] = v
         return self._make_pcm(buf, rate)
+
+    def _make_sfx_pickup(self):
+        # Two quick rising beeps
+        rate = 22050
+        segments = [(880, 0.08), (1320, 0.10)]
+        out = array('h')
+        for freq, dur in segments:
+            n = int(rate * dur)
+            for i in range(n):
+                t = i / rate
+                env = max(0.0, 1.0 - (t / dur))
+                s = math.sin(2 * math.pi * freq * t)
+                out.append(int(2600 * env * s))
+            # tiny gap
+            gap = int(rate * 0.01)
+            out.extend([0] * gap)
+        return self._make_pcm(out, rate)
+
+    def _make_sfx_game_over(self):
+        # Three descending tones
+        rate = 22050
+        segments = [(440, 0.18), (330, 0.18), (262, 0.22)]
+        out = array('h')
+        for freq, dur in segments:
+            n = int(rate * dur)
+            for i in range(n):
+                t = i / rate
+                # Slow decay per segment
+                env = max(0.0, 1.0 - 0.9 * (t / dur))
+                s = math.sin(2 * math.pi * freq * t)
+                out.append(int(3000 * env * s))
+            out.extend([0] * int(rate * 0.015))
+        return self._make_pcm(out, rate)
+
+    def _make_sfx_victory(self):
+        # Simple ascending fanfare
+        rate = 22050
+        segments = [(784, 0.16), (988, 0.16), (1176, 0.20)]
+        out = array('h')
+        for freq, dur in segments:
+            n = int(rate * dur)
+            for i in range(n):
+                t = i / rate
+                # Quick attack, short release
+                env = 1.0 if t < dur * 0.85 else max(0.0, 1.0 - (t - dur * 0.85) / (dur * 0.15))
+                s = math.sin(2 * math.pi * freq * t)
+                out.append(int(2800 * env * s))
+            out.extend([0] * int(rate * 0.012))
+        return self._make_pcm(out, rate)
 
     # --- Entradas de mouse para tela inicial ---
     def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
