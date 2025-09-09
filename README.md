@@ -11,11 +11,13 @@ Bem-vindo ao Warrior Platform, um platformer 2D com combate simples, IA variada 
 - Mecânicas do Jogador
 - Itens e Power‑ups
 - Inimigos (HP, dano, padrões)
+ - UI dos Inimigos (Nome e Barra de Vida)
 - Pontuação e Condições de Fim
 - Clima e Efeitos Visuais
 - Áudio e Arte
 - Persistência (Placares e Banco)
 - Resolução e Dimensionamento
+ - Otimizações de Performance
 - Parâmetros e Ajustes (onde editar)
 
 
@@ -100,13 +102,13 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (30%).
   - Dano de contato: 1.5
   - Velocidade: 1.6
   - Padrão: anda (ping‑pong), mais lento e mais resistente.
-- Morcego
+- Bat
   - HP: 2
   - Dano de contato: 1.0
   - Velocidade base: 2.6 (um pouco mais rápido que goblin)
   - Voo normal: trajetória em onda (amplitude moderada) ao redor da altura inicial.
   - Rasante (ataque mergulhando):
-    - Ativa quando o jogador está no ar, próximo horizontalmente (< ~240 px), e o morcego está acima.
+    - Ativa quando o jogador está no ar, próximo horizontalmente (< ~240 px), e o bat está acima.
     - Persegue o jogador DURANTE o rasante (horizontal + altura), mas interrompe imediatamente se o jogador tocar o chão (nunca persegue no solo).
     - Duração máxima do rasante ~1.2s; ao finalizar entra em recarga (~2.5s).
     - Colisão durante rasante: se descer e colidir com plataformas, “encosta” no topo e encerra o rasante (não atravessa plataformas).
@@ -115,6 +117,19 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (30%).
 Referências no código:
 - Spawns e atributos: `game.py:320–420`
 - IA e animação: `game.py:657–740` (inclui rasante, colisões e recargas)
+
+## UI dos Inimigos (Nome e Barra de Vida)
+- Nome sempre visível sobre cada inimigo, com cor temática do tipo:
+  - Slime: verde (80, 200, 120)
+  - Goblin: verde (60, 170, 90)
+  - Orc: vermelho (200, 70, 70)
+  - Bat: roxo (150, 100, 200)
+- Barra de vida: só aparece após o inimigo sofrer dano pela primeira vez; antes disso, apenas o nome é mostrado.
+- Performance: rótulos de texto são pré-criados no momento do spawn e apenas reposicionados a cada frame.
+
+Referências no código:
+- Criação dos rótulos: `game.py` (funções `spawn_*` dos inimigos)
+- Desenho/condição da barra: `game.py` (bloco de desenho dos inimigos em `on_draw`)
 
 
 ## Pontuação e Condições de Fim
@@ -138,7 +153,7 @@ Referências no código:
 
 ## Áudio e Arte
 - Sons: gerados proceduralmente (ataque, dano, pegar item, power‑up, vitória, game over) via Pyglet.
-- Sprites: gerados por código com PIL (guerreiro, slimes, goblins, orcs, morcegos, coração, baú, efeitos, clima).
+- Sprites: gerados por código com PIL (guerreiro, slimes, goblins, orcs, bats, coração, baú, efeitos, clima).
 
 Referências no código:
 - SFX: `game.py:992–1160`
@@ -162,12 +177,19 @@ Referências no código:
 - Mundo (chão/plataformas/baú) é ancorado ao centro horizontal da janela; o HUD usa as dimensões atuais para se posicionar.
 - Sem letterboxing: a área útil se adapta a 1080p, 2K, 4K e diferentes proporções.
 
+## Otimizações de Performance
+- Título: textos cacheados e atualizados sem recriação por frame (`_ensure_title_ui`).
+- Telas finais (vitória/game over): textos cacheados e recriados apenas quando scores, estado ou tamanho mudam (`_ensure_end_ui`).
+- Banner de upgrade: textos cacheados por conteúdo/tamanho e só atualiza transparência no draw (`_ensure_banner_ui`).
+- Nomes dos inimigos: criados no spawn e apenas reposicionados; barra de vida só aparece após o primeiro dano (menos draw e melhor legibilidade).
+- Resultado: sem alocação de `arcade.Text` por frame nas telas e elementos citados, mantendo FPS alto.
+
 
 ## Parâmetros e Ajustes (onde editar)
 Edite em `game.py` (topo do arquivo) para ajustar comportamentos:
 - Velocidades: `PLAYER_MOVE_SPEED`, `PLAYER_JUMP_SPEED`, `SLIME_SPEED`, `GOBLIN_SPEED`, `ORC_SPEED`, `BAT_SPEED`.
 - Física/Combate: `GRAVITY`, `ATTACK_DURATION`, `ATTACK_HIT_START`, `ATTACK_HIT_END`, `PLAYER_MAX_HP`, `PLAYER_INVULN`.
-- IA do Morcego: tempo de mergulho/cooldown na seção de atualização dos inimigos (`on_update`).
+- IA do Bat: tempo de mergulho/cooldown na seção de atualização dos inimigos (`on_update`).
 - Layout: larguras e posições de plataformas são derivadas de `self.width` e de parâmetros como `stair_tex_w`, `dx_base`.
 
 Dica: para uma experiência “mais difícil”, aumentar ligeiramente `BAT_SPEED` ou reduzir `dive_cooldown` intensifica os rasantes. Para “mais leve”, faça o oposto.
@@ -177,4 +199,3 @@ Dica: para uma experiência “mais difícil”, aumentar ligeiramente `BAT_SPEE
 - Código e assets gerados por script no próprio projeto.
 - Dependências: Arcade, Pillow, Pyglet.
 - Sob os direitos de Rodrigo Cinelli.
-
