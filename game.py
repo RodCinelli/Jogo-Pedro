@@ -140,10 +140,10 @@ class GameWindow(arcade.Window):
         self.sfx = {}
 
         # ChÃ£o
-        ground_tex = make_ground_texture(SCREEN_WIDTH, 40)
+        ground_tex = make_ground_texture(self.width, 40)
         ground = arcade.Sprite()
         ground.texture = ground_tex
-        ground.center_x = SCREEN_WIDTH // 2
+        ground.center_x = self.width // 2
         ground.center_y = 20
         self.wall_list.append(ground)
         self.ground_top = ground.top
@@ -236,7 +236,7 @@ class GameWindow(arcade.Window):
         plat = arcade.Sprite()
         plat.texture = plat_tex
         # Centraliza a plataforma baixa
-        plat.center_x = SCREEN_WIDTH // 2
+        plat.center_x = self.width // 2
         plat.center_y = 150
         self.wall_list.append(plat)
 
@@ -246,7 +246,7 @@ class GameWindow(arcade.Window):
         stair_tex = make_platform_texture(stair_tex_w, 20)
         max_jump_px = int((PLAYER_JUMP_SPEED ** 2) / (2 * GRAVITY))
         step_h = int(max_jump_px * 0.78)
-        center_x = SCREEN_WIDTH // 2
+        center_x = self.width // 2
         dxs = [180, 170]  # nÃ­veis 2 e 3 (superiores mais prÃ³ximos para salto)
         stairs_left = [(center_x - dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
         stairs_right = [(center_x + dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
@@ -295,7 +295,7 @@ class GameWindow(arcade.Window):
         top_y = max(y for _, y in stairs_left + stairs_right)
         center_top = arcade.Sprite()
         center_top.texture = stair_tex
-        center_top.center_x = SCREEN_WIDTH // 2
+        center_top.center_x = self.width // 2
         center_top.center_y = top_y + step_h
         self.wall_list.append(center_top)
         self.spawn_chest(center_top.center_x, center_top.center_y + 18)
@@ -453,22 +453,20 @@ class GameWindow(arcade.Window):
         self.clear()
         # Tela de título (usa Text para performance)
         if self.state == 'title':
-            arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (20, 20, 30))
-            # Desloca levemente o container para a esquerda e um pouco para baixo
-            offset_x = -int(SCREEN_WIDTH * 0.05)
-            offset_y = -int(SCREEN_HEIGHT * 0.04)
-            cx, cy = SCREEN_WIDTH // 2 + offset_x, SCREEN_HEIGHT // 2 + offset_y
+            # Usa dimensões reais da janela e centraliza sem deslocamentos
+            arcade.draw_lrbt_rectangle_filled(0, self.width, 0, self.height, (20, 20, 30))
+            cx, cy = self.width // 2, self.height // 2
 
             # Proporções responsivas
-            title_size = int(min(SCREEN_WIDTH, SCREEN_HEIGHT) * 0.04)
+            title_size = int(min(self.width, self.height) * 0.04)
             prompt_size = int(title_size * 0.5)
-            btn_w = int(SCREEN_WIDTH * 0.16)
-            btn_h = max(36, int(SCREEN_HEIGHT * 0.038))
+            btn_w = int(self.width * 0.16)
+            btn_h = max(36, int(self.height * 0.038))
             box_w = btn_w  # caixa do nome do tamanho do botão
-            box_h = max(32, int(SCREEN_HEIGHT * 0.03))
+            box_h = max(32, int(self.height * 0.03))
 
-            title = arcade.Text("Warrior Platform", cx, cy + int(SCREEN_HEIGHT * 0.13), arcade.color.GOLD, title_size, anchor_x="center")
-            prompt_y = cy + int(SCREEN_HEIGHT * 0.065)
+            title = arcade.Text("Warrior Platform", cx, cy + int(self.height * 0.13), arcade.color.GOLD, title_size, anchor_x="center")
+            prompt_y = cy + int(self.height * 0.065)
             prompt = arcade.Text("Digite seu nome:", cx, prompt_y, arcade.color.ANTIQUE_WHITE, prompt_size, anchor_x="center")
             title.draw(); prompt.draw()
 
@@ -488,7 +486,7 @@ class GameWindow(arcade.Window):
 
             # Botão iniciar (posicionado logo abaixo do campo)
             bx0, bx1 = cx - btn_w // 2, cx + btn_w // 2
-            btn_gap = int(SCREEN_HEIGHT * 0.03)
+            btn_gap = int(self.height * 0.03)
             by0 = y0 - btn_gap - btn_h
             by1 = by0 + btn_h
             # Manual de controles abaixo do botao
@@ -648,8 +646,8 @@ class GameWindow(arcade.Window):
             self.player.left = 0
             if self.player.change_x < 0:
                 self.player.change_x = 0
-        if self.player.right > SCREEN_WIDTH:
-            self.player.right = SCREEN_WIDTH
+        if self.player.right > self.width:
+            self.player.right = self.width
             if self.player.change_x > 0:
                 self.player.change_x = 0
 
