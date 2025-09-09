@@ -395,7 +395,8 @@ class GameWindow(arcade.Window):
         enemy.wave_t = 0.0
         enemy.diving = False
         enemy.dive_timer = 0.0
-        enemy.dive_cooldown = 0.0
+        # Evita mergulho imediato ao iniciar a fase
+        enemy.dive_cooldown = 2.5
         enemy.contact_damage = 1.0
         self.enemy_list.append(enemy)
 
@@ -496,8 +497,8 @@ class GameWindow(arcade.Window):
             base_y = by0 - spacing
             controls = [
                 "Setas Esquerda/Direita: Mover",
-                "Barra de Espaco: Pular",
-                "Z ou Q: Atacar",
+                "Seta para Cima: Pular",
+                "Barra de Espaço: Atacar",
                 "ENTER: Iniciar   |   ESC: Sair",
             ]
             for i, txt in enumerate(controls):
@@ -681,6 +682,7 @@ class GameWindow(arcade.Window):
             e.center_x += e.change_x
             if e.type == "bat":
                 # Dive logic + patrulha em onda (comportamento anterior)
+                prev_y = e.center_y
                 if e.diving:
                     e.dive_timer += delta_time
                     dir_x = 1 if self.player.center_x > e.center_x else -1
@@ -689,9 +691,15 @@ class GameWindow(arcade.Window):
                         e.center_y -= 4
                     else:
                         e.center_y += 1  # overshoot leve
-                    if e.dive_timer > 1.2 or abs(e.center_y - self.player.center_y) < 10:
-                        e.diving = False
-                        e.dive_cooldown = 2.5
+                    # Evita atravessar plataformas durante o rasante
+                    if e.center_y < prev_y:
+                        wall_hits = arcade.check_for_collision_with_list(e, self.wall_list)
+                        if wall_hits:
+                            # Encosta no topo da plataforma e encerra o mergulho
+                            top_y = max(w.top for w in wall_hits)
+                            e.bottom = top_y
+                            e.diving = False
+                            e.dive_cooldown = 2.5
                 else:
                     e.wave_t += delta_time
                     amp = 18
@@ -914,10 +922,10 @@ class GameWindow(arcade.Window):
             self.left_pressed = True
         elif key == arcade.key.RIGHT:
             self.right_pressed = True
-        elif key == arcade.key.SPACE:
+        elif key == arcade.key.UP:
             if self.physics_engine and self.physics_engine.can_jump():
                 self.player.change_y = PLAYER_JUMP_SPEED
-        elif key == arcade.key.Z or key == arcade.key.Q:
+        elif key == arcade.key.SPACE:
             if not self.is_attacking:
                 self.is_attacking = True
                 self.attack_time = ATTACK_DURATION
