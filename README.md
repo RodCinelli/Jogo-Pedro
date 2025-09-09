@@ -19,6 +19,9 @@ Bem-vindo ao Warrior Platform, um platformer 2D com combate simples, IA variada 
 - Resolução e Dimensionamento
  - Otimizações de Performance
 - Parâmetros e Ajustes (onde editar)
+ - Build com auto‑py‑to‑exe (Windows)
+ - Erros comuns no executável (OpenGL/Arcade)
+ - Publicar no GitHub Releases
 
 
 ## Visão Geral
@@ -279,6 +282,30 @@ Checklist rápido (costuma resolver)
 - Hidden imports: `arcade.gl.backends`, `arcade.gl.backends.opengl`, `arcade.gl.backends.pyglet`
 - Additional args: `--collect-submodules arcade.gl.backends`
 - Rebuild limpo: apagar `build/` e `dist/`
+
+## Publicar no GitHub Releases
+Passo a passo para publicar o ZIP do jogo no seu repositório.
+
+1) Gere o ZIP final
+- Onedir: compacte o conteúdo de `dist/WarriorPlatform/` para `WarriorPlatform-win64.zip` (os arquivos precisam ficar na raiz após extração).
+- Onefile: compacte o `WarriorPlatform.exe` (opcional) ou publique diretamente o `.exe`.
+
+2) Crie um Release pelo site do GitHub
+- Vá em “Releases” → “Draft a new release”.
+- Tag: por exemplo `v1.0.0`.
+- Título: “Warrior Platform 1.0.0”.
+- Arraste o(s) arquivo(s) ZIP para a área “Assets”.
+- Opcional: anexe `SHA256SUMS.txt` com o hash do arquivo e um `README-Release.md` com instruções rápidas.
+- Clique em “Publish release”.
+
+3) CLI (opcional, com GitHub CLI)
+- `gh release create v1.0.0 dist/WarriorPlatform-win64.zip --title "Warrior Platform 1.0.0" --notes "Extract and run WarriorPlatform.exe"`
+- Link público prático: `https://github.com/SEU_USUARIO/SEU_REPO/releases/latest`
+
+Boas práticas
+- Nomeie por plataforma: `WarriorPlatform-win64.zip`, `WarriorPlatform-macOS.zip` etc.
+- Inclua instruções para o jogador: “Extraia e execute `WarriorPlatform.exe` (evite ‘Arquivos de Programas’ por permissões)”.
+- Publique também o hash SHA‑256 e, se possível, assine o executável para reduzir alertas do SmartScreen.
 
 
 ## Parâmetros e Ajustes (onde editar)
