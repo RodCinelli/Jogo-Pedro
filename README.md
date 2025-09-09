@@ -185,6 +185,102 @@ Referências no código:
 - Resultado: sem alocação de `arcade.Text` por frame nas telas e elementos citados, mantendo FPS alto.
 
 
+## Build com auto‑py‑to‑exe (Windows)
+Passo a passo para gerar o executável e empacotar em ZIP.
+
+- Instalar GUI: `pip install auto-py-to-exe`
+- Abrir: `auto-py-to-exe`
+
+Campos principais
+- Script location: selecione `game.py`.
+- Onefile/Onedir:
+  - Recomendado: Onedir (pasta). Abre mais rápido e evita overhead do “unpack” do onefile.
+  - Alternativa: Onefile (um único .exe). Mais prático, porém inicia mais lento.
+- Console window: Window Based (`--noconsole`) para não abrir console.
+- Icon: opcional (`.ico`).
+- Output directory: pasta de saída (ex.: `dist/`).
+
+Advanced (importante)
+- Hidden Imports (adicione todos):
+  - `arcade.gl`
+  - `arcade.gl.backends`
+  - `arcade.gl.backends.opengl`
+  - `arcade.gl.backends.pyglet`
+  - `assets.sprites`
+- Additional command line arguments:
+  - `--collect-submodules arcade.gl.backends --collect-submodules pyglet`
+- Additional Files:
+  - Não é necessário (sprites e sons são gerados por código). Se quiser incluir `README.md`, adicione aqui.
+
+Build
+- Clique em “Convert .py to .exe”.
+- Saída típica:
+  - Onedir: `dist/WarriorPlatform/` contendo `.exe` + DLLs.
+  - Onefile: `dist/WarriorPlatform.exe`.
+
+Observações específicas deste jogo
+- Banco/arquivos gravados: `warrior_platform.db` e `scores.txt` são criados no diretório atual (`os.getcwd()`). Distribua o `.zip` para que o jogador extraia e rode em uma pasta com permissão de escrita (ex.: `Documentos/Jogos/WarriorPlatform`), não em “Arquivos de Programas”.
+- Fullscreen: inicia em tela cheia; UI e mundo centralizam de acordo com a resolução do monitor.
+- Dependências: Arcade/Pyglet/Pillow são empacotados automaticamente; não há pastas de assets externas.
+
+Empacotar em ZIP para hospedagem
+- Onedir (recomendado):
+  - Entre em `dist/WarriorPlatform/` e compacte TODO o conteúdo (os arquivos precisam ficar no topo após extração).
+  - Ex.: `WarriorPlatform-win64.zip`.
+- Onefile:
+  - Opcional compactar apenas o `.exe` (ou publicar direto).
+
+Hospedar o ZIP
+- Itch.io (recomendado): crie a página e faça upload do ZIP. Para updates rápidos: `butler push WarriorPlatform-win64.zip usuario/jogo:windows`.
+- GitHub Releases: crie um release e anexe o ZIP.
+- Qualquer site estático: faça upload do ZIP e adicione um botão de download.
+
+Testar antes de publicar
+- Execute em uma máquina “limpa” (VM):
+  - Abre em fullscreen
+  - Cria/atualiza `warrior_platform.db` e `scores.txt` sem erro
+  - Áudio e inputs funcionam
+- Se notar que `assets` não foi incluído:
+  - Confirme o argumento `--hidden-import assets.sprites`.
+  - Alternativa robusta: adicionar um arquivo vazio `assets/__init__.py` ao projeto.
+
+Dicas úteis
+- Nome do executável: em “Name of Application”, defina `WarriorPlatform`.
+- Assinatura opcional: assinar o `.exe` reduz avisos do SmartScreen (Windows).
+- Onefile vs Onedir: para jogadores menos técnicos, Onefile pode ser mais conveniente; para desempenho/arranque, prefira Onedir.
+
+
+## Erros comuns no executável (OpenGL/Arcade)
+Se ver mensagens como “arcade.gl Backend Provider 'opengl' not found” ou “No module named 'arcade.gl.backends'”, o empacotador não incluiu os submódulos dinâmicos do Arcade.
+
+Como corrigir (auto‑py‑to‑exe)
+- Hidden imports (obrigatório): adicione em “Advanced → Hidden imports”
+  - `arcade.gl`, `arcade.gl.backends`, `arcade.gl.backends.opengl`, `arcade.gl.backends.pyglet`, `assets.sprites`
+- Additional args (recomendado): em “Advanced → Additional command line arguments”
+  - `--collect-submodules arcade.gl.backends --collect-submodules pyglet`
+- Modo de saída: prefira Onedir (pasta) em vez de Onefile.
+- Reconstrução: apague `build/` e `dist/` antes de reconstruir.
+
+Plano B (forçar provider e ajudar o empacotador)
+- Opcional: fixar o provider do Arcade para “pyglet” no topo de `game.py`, antes de `import arcade`:
+  - `import os`
+  - `os.environ.setdefault("ARCADE_GL_PROVIDER", "pyglet")`
+- Ainda mantenha os hidden‑imports acima.
+
+Se continuar dando erro
+- Hook dedicado: crie `hook-arcade.gl.backends.py` com:
+  - `from PyInstaller.utils.hooks import collect_submodules`
+  - `hiddenimports = collect_submodules('arcade.gl.backends')`
+  - Em “Additional Hooks Dir”, aponte para a pasta do hook e reconstrua.
+- Atualize ferramentas: use PyInstaller ≥ 5.13 e versões recentes de Arcade/Pyglet.
+- Ambiente de execução: precisa de GPU/driver com OpenGL 3.3+ (VM/RDP sem aceleração pode falhar). Instale o Microsoft Visual C++ Redistributable, se necessário.
+
+Checklist rápido (costuma resolver)
+- Hidden imports: `arcade.gl.backends`, `arcade.gl.backends.opengl`, `arcade.gl.backends.pyglet`
+- Additional args: `--collect-submodules arcade.gl.backends`
+- Rebuild limpo: apagar `build/` e `dist/`
+
+
 ## Parâmetros e Ajustes (onde editar)
 Edite em `game.py` (topo do arquivo) para ajustar comportamentos:
 - Velocidades: `PLAYER_MOVE_SPEED`, `PLAYER_JUMP_SPEED`, `SLIME_SPEED`, `GOBLIN_SPEED`, `ORC_SPEED`, `BAT_SPEED`.
