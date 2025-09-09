@@ -397,6 +397,9 @@ class GameWindow(arcade.Window):
         enemy.dive_timer = 0.0
         # Evita mergulho imediato ao iniciar a fase
         enemy.dive_cooldown = 2.5
+        # Parâmetros do mergulho (direção e alvo vertical capturados no início)
+        enemy.dive_dir = 0
+        enemy.dive_target_y = y
         enemy.contact_damage = 1.0
         self.enemy_list.append(enemy)
 
@@ -681,18 +684,27 @@ class GameWindow(arcade.Window):
             # Vivo: movimento
             e.center_x += e.change_x
             if e.type == "bat":
-                # Dive logic + patrulha em onda (comportamento anterior)
+                # Patrulha em onda + mergulho controlado (sem perseguir no solo)
                 prev_y = e.center_y
                 if e.diving:
                     e.dive_timer += delta_time
-                    dir_x = 1 if self.player.center_x > e.center_x else -1
-                    e.change_x = (BAT_SPEED + 0.2) * dir_x
-                    if e.center_y > self.player.center_y + 8:
-                        e.center_y -= 4
+                    # Persegue o jogador APENAS enquanto ele estiver no ar
+                    player_on_ground = self.player.bottom <= self.ground_top + 6
+                    target_y = None
+                    if not player_on_ground:
+                        dir_x = 1 if self.player.center_x > e.center_x else -1
+                        e.change_x = (BAT_SPEED + 0.2) * dir_x
+                        target_y = self.player.center_y
+                        if e.center_y > target_y + 8:
+                            e.center_y -= 4
+                        else:
+                            e.center_y += 1  # overshoot leve
                     else:
-                        e.center_y += 1  # overshoot leve
+                        # Jogador no chão: não perseguir; encerra o mergulho
+                        e.diving = False
+                        e.dive_cooldown = 2.5
                     # Evita atravessar plataformas durante o rasante
-                    if e.center_y < prev_y:
+                    if e.diving and e.center_y < prev_y:
                         wall_hits = arcade.check_for_collision_with_list(e, self.wall_list)
                         if wall_hits:
                             # Encosta no topo da plataforma e encerra o mergulho
@@ -700,6 +712,10 @@ class GameWindow(arcade.Window):
                             e.bottom = top_y
                             e.diving = False
                             e.dive_cooldown = 2.5
+                    # Encerra por tempo ou por alcançar a altura alvo (quando perseguindo no ar)
+                    if e.diving and (e.dive_timer > 1.2 or (target_y is not None and abs(e.center_y - target_y) < 10)):
+                        e.diving = False
+                        e.dive_cooldown = 2.5
                 else:
                     e.wave_t += delta_time
                     amp = 18
@@ -712,6 +728,9 @@ class GameWindow(arcade.Window):
                         if (not player_on_ground) and abs(self.player.center_x - e.center_x) < 240 and e.center_y > self.player.center_y + 40:
                             e.diving = True
                             e.dive_timer = 0.0
+                            # Captura direção/altura no início do mergulho (não persegue depois)
+                            e.dive_dir = 1 if self.player.center_x > e.center_x else -1
+                            e.dive_target_y = self.player.center_y
             if e.center_x < e.bound_left:
                 e.center_x = e.bound_left
                 e.change_x *= -1
