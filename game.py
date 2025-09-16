@@ -27,7 +27,7 @@ from assets.sprites import (
     make_lightning_texture,
 )
 
-# ConfiguraÃ§Ãµes bÃ¡sicas
+# Configurações da janela e do jogo
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 SCREEN_TITLE = "Warrior Platform"
@@ -45,7 +45,7 @@ BAT_SPEED = GOBLIN_SPEED + 0.4  # morcego um pouco mais rápido que goblin
 ATTACK_DURATION = 0.36
 ATTACK_HIT_START = 0.12
 ATTACK_HIT_END = 0.28
-PLAYER_MAX_HP = 5  # em coraÃ§Ãµes, permite meio-coraÃ§Ã£o
+PLAYER_MAX_HP = 5  # em corações, permite meio-coração
 PLAYER_INVULN = 1.0
 ENEMY_CONTACT_DAMAGE = 1
 
@@ -241,16 +241,16 @@ class GameWindow(arcade.Window):
         self.wall_list.append(plat)
 
         # Escadas de plataformas (altura de pulo ~120px)
-        # Centralizadas em relaÃ§Ã£o ao centro da tela. DistÃ¢ncias pequenas para permitir pulos entre as superiores.
+        # Centralizadas em relação ao centro da tela. Distâncias pequenas para permitir pulos entre as superiores.
         stair_tex_w = 180
         stair_tex = make_platform_texture(stair_tex_w, 20)
         max_jump_px = int((PLAYER_JUMP_SPEED ** 2) / (2 * GRAVITY))
         step_h = int(max_jump_px * 0.78)
         center_x = self.width // 2
-        dxs = [180, 170]  # nÃ­veis 2 e 3 (superiores mais prÃ³ximos para salto)
+        dxs = [180, 170]  # níveis 2 e 3 (superiores mais próximos para salto)
         stairs_left = [(center_x - dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
         stairs_right = [(center_x + dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
-        # Guardar plataformas por andar (nÃ£o criar inimigos aqui)
+        # Guardar plataformas por andar (não criar inimigos aqui)
         row2_stairs = []
         row3_stairs = []
         for x, y in stairs_left + stairs_right:
@@ -266,7 +266,7 @@ class GameWindow(arcade.Window):
             elif y == ground.top + step_h * 3:
                 row3_stairs.append((x, p.top, patrol_min, patrol_max))
 
-        # Plataformas extras para popular e espaÃ§ar mais a tela
+        # Plataformas extras para popular e espaçar mais a tela
         dx_base = 160
         # Afastar um pouco as duas plataformas centrais do primeiro andar
         extra_levels = [
@@ -291,7 +291,7 @@ class GameWindow(arcade.Window):
                 else:
                     row2_extras.append((ex, ep.top, patrol_min, patrol_max))
 
-        # BaÃº do espada melhor na plataforma mais alta (direita)
+        # Baú do espada melhor na plataforma mais alta (direita)
         top_y = max(y for _, y in stairs_left + stairs_right)
         center_top = arcade.Sprite()
         center_top.texture = stair_tex
@@ -315,16 +315,16 @@ class GameWindow(arcade.Window):
         self.physics_engine = arcade.PhysicsEnginePlatformer(self.player, self.wall_list, gravity_constant=GRAVITY)
 
         # Inimigos
-        # Solo: slimes (lentos, 0.5 coraÃ§Ã£o de dano)
+        # Solo: slimes (lentos, 0.5 coração de dano)
         self.spawn_slime(x=400, y=ground.top, min_x=360, max_x=740)
         self.spawn_slime(x=900, y=ground.top, min_x=780, max_x=1150)
         self.spawn_slime(x=1400, y=ground.top, min_x=1260, max_x=1680)
 
-        # Primeiro andar (extras nÃ­vel 1): goblins
+        # Primeiro andar (extras nível 1): goblins
         for x, top, mn, mx in row1_extras:
             self.spawn_goblin(x=x, y=top, min_x=mn, max_x=mx)
 
-        # Segundo andar (extras nÃ­vel 2): 2 goblins nas pontas + 1 orc no centro
+        # Segundo andar (extras nível 2): 2 goblins nas pontas + 1 orc no centro
         if row2_extras:
             row2_sorted = sorted(row2_extras, key=lambda t: t[0])
             # pontas -> goblins
@@ -337,7 +337,7 @@ class GameWindow(arcade.Window):
             ox, ot, omn, omx = row2_sorted[mid_idx]
             self.spawn_orc(x=ox, y=ot, min_x=omn, max_x=omx)
 
-        # Ãšltima plataforma antes do baÃº (andares escada mais altos): 2 orcs
+        # Última plataforma antes do baú (andares escada mais altos): 2 orcs
         for x, top, mn, mx in row3_stairs:
             self.spawn_orc(x=x, y=top, min_x=mn, max_x=mx)
 
@@ -506,7 +506,7 @@ class GameWindow(arcade.Window):
                 t.draw()
             return
 
-        # CÃ©u simples
+        # Céu simples
         arcade.draw_lrbt_rectangle_filled(0, self.width, 260, self.height, self.sky_color)
         arcade.draw_lrbt_rectangle_filled(0, self.width, 0, 260, (60, 90, 70))
         self.sky_list.draw()
@@ -612,12 +612,6 @@ class GameWindow(arcade.Window):
             self._cleanup_sfx_players()
             return
 
-        # Estados que não atualizam o mundo
-        if self.state != 'playing':
-            if getattr(self, 'banner_timer', 0) > 0:
-                self.banner_timer -= delta_time
-            self._cleanup_sfx_players()
-            return
         # Movimento por teclas
         self.player.change_x = 0
         if self.left_pressed and not self.right_pressed:
@@ -627,7 +621,7 @@ class GameWindow(arcade.Window):
             self.player.change_x = PLAYER_MOVE_SPEED
             self.facing_right = True
 
-        # FÃ­sica do jogador
+        # Física do jogador
         self.physics_engine.update()
         # Limpa players de SFX finalizados
         self._cleanup_sfx_players()
@@ -652,16 +646,16 @@ class GameWindow(arcade.Window):
         if self.game_over:
             return
 
-        # Atualiza inimigos (movimento ping-pong/voo + animaÃ§Ã£o + vida)
+        # Atualiza inimigos (movimento ping-pong/voo + animação + vida)
         for e in list(self.enemy_list):
-            # Mortos: tocar animaÃ§Ã£o e remover
+            # Mortos: tocar animação e remover
             if e.dead:
                 e.death_timer += delta_time
                 if e.death_timer > 0.45:
                     if not e.scored:
                         self.score += 100
                         e.scored = True
-                        # Drop de coraÃ§Ã£o 30%
+                        # Drop de coração 30%
                         if random.random() < 0.3:
                             self.spawn_heart(e.center_x, e.center_y + 18)
                     e.remove_from_sprite_lists()
@@ -772,7 +766,7 @@ class GameWindow(arcade.Window):
             self.end_game('victory')
             return
 
-        # Ataque simples com hitbox na direÃ§Ã£o do guerreiro
+        # Ataque simples com hitbox na direção do guerreiro
         if self.is_attacking:
             self.attack_time -= delta_time
             progress = ATTACK_DURATION - self.attack_time
@@ -1036,13 +1030,13 @@ class GameWindow(arcade.Window):
             player.volume = max(0.0, min(1.0, float(volume)))
             player.queue(src)
             player.play()
-            # Mant�m refer�ncia at� terminar para n�o cortar o som
+            # Mantém referência até terminar para não cortar o som
             self._sfx_players.append(player)
         except Exception:
             pass
 
     def _cleanup_sfx_players(self):
-        # Remove players que j� finalizaram a reprodu��o
+        # Remove players que já finalizaram a reprodução
         alive = []
         for p in self._sfx_players:
             try:
