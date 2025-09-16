@@ -171,6 +171,88 @@ def make_slash_textures():
     return {"slash_right": right, "slash_left": left}
 
 
+# --- Clima: sol, lua, estrela, chuva, raio ---
+def make_sun_texture(diameter: int = 64) -> arcade.Texture:
+    img = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    r = diameter // 2
+    center = (r, r)
+    body = (255, 215, 70, 255)
+    glow = (255, 240, 150, 200)
+    # corpo
+    d.ellipse([4, 4, diameter - 4, diameter - 4], fill=body)
+    # halo
+    d.ellipse([0, 0, diameter, diameter], outline=glow, width=3)
+    # raios simples
+    for i in range(8):
+        ang = i * 45
+        if i % 2 == 0:
+            l = r + 6
+        else:
+            l = r + 2
+        # desenha pequenos traços ao redor
+        if i % 2 == 0:
+            # vertical/horizontal
+            if ang == 0:
+                d.line([center[0], 2, center[0], 10], fill=glow, width=2)
+            elif ang == 90:
+                d.line([2, center[1], 10, center[1]], fill=glow, width=2)
+            elif ang == 180:
+                d.line([center[0], diameter - 10, center[0], diameter - 2], fill=glow, width=2)
+            else:
+                d.line([diameter - 10, center[1], diameter - 2, center[1]], fill=glow, width=2)
+    return arcade.Texture(name=f"sun_{diameter}", image=ImageOps.flip(img))
+
+
+def make_moon_texture(diameter: int = 56) -> arcade.Texture:
+    img = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    body = (230, 230, 240, 255)
+    shade = (180, 180, 200, 220)
+    d.ellipse([0, 0, diameter - 1, diameter - 1], fill=body)
+    # craters
+    for cx, cy, r in [(diameter*0.35, diameter*0.35, 4), (diameter*0.6, diameter*0.5, 3), (diameter*0.4, diameter*0.7, 5)]:
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=shade)
+    return arcade.Texture(name=f"moon_{diameter}", image=ImageOps.flip(img))
+
+
+def make_star_texture(size: int = 3) -> arcade.Texture:
+    s = max(2, size)
+    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, s - 1, s - 1], fill=(255, 255, 255, 220))
+    return arcade.Texture(name=f"star_{s}", image=ImageOps.flip(img))
+
+
+def make_raindrop_texture(width: int = 2, height: int = 10) -> arcade.Texture:
+    w = max(2, width)
+    h = max(8, height)
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    color = (120, 170, 255, 200)
+    d.rounded_rectangle([0, 0, w - 1, h - 1], radius=w//2, fill=color)
+    return arcade.Texture(name=f"raindrop_{w}x{h}", image=ImageOps.flip(img))
+
+
+def make_lightning_texture(width: int = 8, height: int = 120) -> arcade.Texture:
+    w = max(6, width)
+    h = max(40, height)
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    bolt = (255, 240, 170, 255)
+    # ziguezague simples
+    path = [
+        (w//2, 0),
+        (w//2 - 2, h*0.25),
+        (w//2 + 2, h*0.45),
+        (w//2 - 3, h*0.65),
+        (w//2 + 1, h*0.85),
+        (w//2 - 2, h)
+    ]
+    d.line(path, fill=bolt, width=3)
+    return arcade.Texture(name=f"lightning_{w}x{h}", image=ImageOps.flip(img))
+
+
 def make_ground_texture(width: int, height: int) -> arcade.Texture:
     """Gera textura do chÃ£o com grama e terra com ruÃ­do simples."""
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))

@@ -1,6 +1,13 @@
 ﻿import arcade
 import random
 import math
+import sqlite3
+import os
+import time
+import io
+import wave
+from array import array
+import pyglet
 from assets.sprites import (
     make_warrior_textures,
     make_ground_texture,
@@ -13,12 +20,17 @@ from assets.sprites import (
     make_goblin_textures,
     make_cloud_texture,
     make_sword_fx_texture,
+    make_sun_texture,
+    make_moon_texture,
+    make_star_texture,
+    make_raindrop_texture,
+    make_lightning_texture,
 )
 
 # ConfiguraÃ§Ãµes bÃ¡sicas
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
-SCREEN_TITLE = "Rogue Platformer"
+SCREEN_TITLE = "Warrior Platform"
 
 PLAYER_MOVE_SPEED = 4.0
 PLAYER_JUMP_SPEED = 12.0
@@ -50,6 +62,9 @@ class GameWindow(arcade.Window):
         self.enemy_list = arcade.SpriteList()
         self.pickup_list = arcade.SpriteList()
         self.clouds = arcade.SpriteList()
+        self.sky_list = arcade.SpriteList()
+        self.rain_list = arcade.SpriteList()
+        self.bolt_list = arcade.SpriteList()
         self.fx_list = arcade.SpriteList()
 
         self.player = arcade.Sprite()
@@ -57,6 +72,9 @@ class GameWindow(arcade.Window):
         self.score = 0
         self.score_text = None
         self.timer_text = None
+        self.state = 'title'
+        self.player_name = ''
+        self.top_scores = []
         self.player_max_hp = PLAYER_MAX_HP
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
@@ -78,7 +96,11 @@ class GameWindow(arcade.Window):
         self.enemies_hit = set()
 
         self.textures = make_warrior_textures()
-
+        self.db_path = os.path.join(os.getcwd(), 'warrior_platform.db')
+        # Inicializa banco (scores/perfis)
+        # Lista de players de SFX ativos para evitar GC precoce
+        self._sfx_players = []
+        self.ensure_db()
         self.setup()
 
     def setup(self):
@@ -86,13 +108,18 @@ class GameWindow(arcade.Window):
         self.wall_list = arcade.SpriteList(use_spatial_hash=True)
         self.enemy_list = arcade.SpriteList()
         self.pickup_list = arcade.SpriteList()
+        # Recria listas visuais do céu/clima para não sobrar sprites entre partidas
         self.clouds = arcade.SpriteList()
+        self.sky_list = arcade.SpriteList()
+        self.rain_list = arcade.SpriteList()
+        self.bolt_list = arcade.SpriteList()
         self.score = 0
-        self.score_text = arcade.Text("Score: 0", 10, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
+        self.score_text = arcade.Text("Score: 0", 10, self.height - 30, arcade.color.WHITE, 16)
         # Timer de 5 minutos
         self.time_limit = 300.0
         self.time_remaining = self.time_limit
-        self.timer_text = arcade.Text("Tempo: 05:00", SCREEN_WIDTH - 170, SCREEN_HEIGHT - 30, arcade.color.WHITE, 16)
+        # Posição inicial baseada no tamanho atual da janela
+        self.timer_text = arcade.Text("Tempo: 05:00", self.width - 10, self.height - 30, arcade.color.WHITE, 16, anchor_x="right")
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
         self.player_damage = 1
@@ -103,39 +130,113 @@ class GameWindow(arcade.Window):
         self.input_name = ""
         self.game_over_title = None
         self.game_over_prompt = None
+        # Clima
+        # day_sunny | day_cloudy | day_rain | night_clear | night_cloudy | night_rain
+        self.weather = random.choice(['day_sunny', 'day_cloudy', 'day_rain', 'night_clear', 'night_cloudy', 'night_rain'])
+        self.sky_color = (50, 70, 110)
+        self.lightning_flash = 0.0
+        self.lightning_cd = 0.0
+        # SFX (efeitos) – inicializados em init_sfx()
+        self.sfx = {}
 
         # ChÃ£o
-        ground_tex = make_ground_texture(SCREEN_WIDTH, 40)
+        ground_tex = make_ground_texture(self.width, 40)
         ground = arcade.Sprite()
         ground.texture = ground_tex
-        ground.center_x = SCREEN_WIDTH // 2
+        ground.center_x = self.width // 2
         ground.center_y = 20
         self.wall_list.append(ground)
         self.ground_top = ground.top
 
-        # Nuvens no ceu (espalhadas uniformemente e mais altas)
-        num_cols = 8
-        margin_x = 140
-        x_step = (SCREEN_WIDTH - 2 * margin_x) / (num_cols - 1)
-        # linhas perto do topo da tela
-        y_rows = [SCREEN_HEIGHT - 200, SCREEN_HEIGHT - 160, SCREEN_HEIGHT - 240, SCREEN_HEIGHT - 120]
-        for i in range(num_cols):
-            w = random.randint(120, 240)
-            h = random.randint(50, 90)
-            cloud = arcade.Sprite()
-            cloud.texture = make_cloud_texture(w, h, alpha=random.randint(190, 235))
-            # Distribui uniformemente no eixo X e alterna linhas de Y
-            jitter = random.randint(-30, 30)
-            cloud.center_x = int(margin_x + i * x_step + jitter)
-            cloud.center_y = y_rows[i % len(y_rows)] + random.randint(-15, 15)
-            self.clouds.append(cloud)
+        # Configuração do clima e céu (nuvens, sol/lua, chuva)
+        # Cores básicas do céu por clima
+        if self.weather.startswith('day_'):
+            # dia
+            if self.weather == 'day_sunny':
+                self.sky_color = (100, 140, 200)
+            elif self.weather == 'day_cloudy':
+                self.sky_color = (70, 90, 130)
+            else:  # day_rain
+                self.sky_color = (60, 80, 110)
+        else:
+            # noite
+            if self.weather == 'night_clear':
+                self.sky_color = (18, 22, 34)
+            elif self.weather == 'night_cloudy':
+                self.sky_color = (22, 26, 40)
+            else:  # night_rain
+                self.sky_color = (20, 24, 36)
+
+        # Nuvens (espalhadas e ajustadas pelo clima)
+        generate_clouds = self.weather in ('day_cloudy', 'day_rain', 'night_cloudy', 'night_rain')
+        if generate_clouds:
+            num_cols = 8
+            margin_x = 140
+            x_step = (self.width - 2 * margin_x) / (num_cols - 1)
+            y_rows = [self.height - 200, self.height - 160, self.height - 240, self.height - 120]
+            for i in range(num_cols):
+                w = random.randint(120, 240)
+                h = random.randint(50, 90)
+                cloud = arcade.Sprite()
+                base_alpha = 210
+                if self.weather == 'day_cloudy':
+                    base_alpha = random.randint(210, 245)
+                elif self.weather == 'night_cloudy':
+                    base_alpha = random.randint(110, 165)
+                elif self.weather.endswith('rain'):
+                    base_alpha = random.randint(180, 210)
+                cloud.texture = make_cloud_texture(w, h, alpha=base_alpha)
+                jitter = random.randint(-30, 30)
+                cloud.center_x = int(margin_x + i * x_step + jitter)
+                cloud.center_y = y_rows[i % len(y_rows)] + random.randint(-15, 15)
+                self.clouds.append(cloud)
+
+        # Sol/Lua/Estrelas/Raindrops
+        if self.weather == 'day_sunny':
+            sun = arcade.Sprite()
+            sun.texture = make_sun_texture(72)
+            sun.center_x = self.width - 120
+            sun.center_y = self.height - 120
+            self.sky_list.append(sun)
+        elif self.weather == 'night_clear':
+            moon = arcade.Sprite()
+            moon.texture = make_moon_texture(58)
+            moon.center_x = self.width - 160
+            moon.center_y = self.height - 140
+            self.sky_list.append(moon)
+            # estrelas
+            for _ in range(40):
+                st = arcade.Sprite()
+                st.texture = make_star_texture(random.randint(2, 3))
+                st.center_x = random.randint(10, self.width - 10)
+                st.center_y = random.randint(int(self.height * 0.6), self.height - 10)
+                st.alpha = random.randint(160, 230)
+                self.sky_list.append(st)
+        elif self.weather == 'night_cloudy':
+            moon = arcade.Sprite()
+            moon.texture = make_moon_texture(58)
+            moon.center_x = self.width - 160
+            moon.center_y = self.height - 140
+            self.sky_list.append(moon)
+        if self.weather.endswith('rain'):
+            # gotas de chuva
+            drops = int(220 * (self.width / 1920))
+            drop_tex = make_raindrop_texture(2, 10)
+            for _ in range(drops):
+                d = arcade.Sprite()
+                d.texture = drop_tex
+                d.center_x = random.randint(0, self.width)
+                d.center_y = random.randint(260, self.height)
+                d.speed = random.uniform(260, 420)
+                d.wind = random.uniform(-20, 20)
+                self.rain_list.append(d)
 
         # Plataforma simples
         plat_tex = make_platform_texture(220, 20)
         plat = arcade.Sprite()
         plat.texture = plat_tex
         # Centraliza a plataforma baixa
-        plat.center_x = SCREEN_WIDTH // 2
+        plat.center_x = self.width // 2
         plat.center_y = 150
         self.wall_list.append(plat)
 
@@ -145,7 +246,7 @@ class GameWindow(arcade.Window):
         stair_tex = make_platform_texture(stair_tex_w, 20)
         max_jump_px = int((PLAYER_JUMP_SPEED ** 2) / (2 * GRAVITY))
         step_h = int(max_jump_px * 0.78)
-        center_x = SCREEN_WIDTH // 2
+        center_x = self.width // 2
         dxs = [180, 170]  # nÃ­veis 2 e 3 (superiores mais prÃ³ximos para salto)
         stairs_left = [(center_x - dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
         stairs_right = [(center_x + dxs[i], ground.top + step_h * (i + 2)) for i in range(len(dxs))]
@@ -194,7 +295,7 @@ class GameWindow(arcade.Window):
         top_y = max(y for _, y in stairs_left + stairs_right)
         center_top = arcade.Sprite()
         center_top.texture = stair_tex
-        center_top.center_x = SCREEN_WIDTH // 2
+        center_top.center_x = self.width // 2
         center_top.center_y = top_y + step_h
         self.wall_list.append(center_top)
         self.spawn_chest(center_top.center_x, center_top.center_y + 18)
@@ -259,6 +360,12 @@ class GameWindow(arcade.Window):
         enemy.anim_index = 0
         enemy.facing_right = True
         enemy.type = "slime"
+        # Nome/color do inimigo (pré-criado para performance)
+        enemy.display_name = "Slime"
+        enemy.name_color = (80, 200, 120, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
         # Vida/combate
         enemy.max_hp = 3
         enemy.hp = enemy.max_hp
@@ -267,6 +374,7 @@ class GameWindow(arcade.Window):
         enemy.death_timer = 0.0
         enemy.scored = False
         enemy.contact_damage = 0.5
+        enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
     def spawn_bat(self, x: float, y: float, min_x: float, max_x: float):
@@ -284,6 +392,12 @@ class GameWindow(arcade.Window):
         enemy.anim_index = 0
         enemy.facing_right = True
         enemy.type = "bat"
+        # Nome/color do inimigo
+        enemy.display_name = "Bat"
+        enemy.name_color = (150, 100, 200, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
         # Vida/combate
         enemy.max_hp = 2
         enemy.hp = enemy.max_hp
@@ -294,8 +408,13 @@ class GameWindow(arcade.Window):
         enemy.wave_t = 0.0
         enemy.diving = False
         enemy.dive_timer = 0.0
-        enemy.dive_cooldown = 0.0
+        # Evita mergulho imediato ao iniciar a fase
+        enemy.dive_cooldown = 2.5
+        # Parâmetros do mergulho (direção e alvo vertical capturados no início)
+        enemy.dive_dir = 0
+        enemy.dive_target_y = y
         enemy.contact_damage = 1.0
+        enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
     def spawn_goblin(self, x: float, y: float, min_x: float, max_x: float):
@@ -312,6 +431,12 @@ class GameWindow(arcade.Window):
         enemy.anim_index = 0
         enemy.facing_right = True
         enemy.type = "goblin"
+        # Nome/color do inimigo
+        enemy.display_name = "Goblin"
+        enemy.name_color = (60, 170, 90, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
         enemy.max_hp = 3
         enemy.hp = enemy.max_hp
         enemy.hurt_timer = 0.0
@@ -319,6 +444,7 @@ class GameWindow(arcade.Window):
         enemy.death_timer = 0.0
         enemy.scored = False
         enemy.contact_damage = 1.0
+        enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
     def spawn_orc(self, x: float, y: float, min_x: float, max_x: float):
@@ -335,6 +461,12 @@ class GameWindow(arcade.Window):
         enemy.anim_index = 0
         enemy.facing_right = True
         enemy.type = "orc"
+        # Nome/color do inimigo
+        enemy.display_name = "Orc"
+        enemy.name_color = (200, 70, 70, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
         enemy.max_hp = 4
         enemy.hp = enemy.max_hp
         enemy.hurt_timer = 0.0
@@ -342,15 +474,51 @@ class GameWindow(arcade.Window):
         enemy.death_timer = 0.0
         enemy.scored = False
         enemy.contact_damage = 1.5
+        enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
     def on_draw(self):
         self.clear()
+        # Tela de título (usa Text para performance)
+        if self.state == 'title':
+            # Usa dimensões reais da janela e centraliza; textos em cache para performance
+            arcade.draw_lrbt_rectangle_filled(0, self.width, 0, self.height, (20, 20, 30))
+            self._ensure_title_ui()
+            # Caixa de texto
+            x0, y0, x1, y1 = self._title_box
+            arcade.draw_lrbt_rectangle_filled(x0, x1, y0, y1, (44, 46, 64))
+            arcade.draw_lrbt_rectangle_outline(x0, x1, y0, y1, (90, 94, 122), border_width=2)
+            # Atualiza nome com caret piscando
+            caret = '_' if (time.perf_counter() % 1.0) < 0.5 else ' '
+            self.name_field_text.text = (self.player_name or '') + caret
+            self.name_field_text.draw()
+            # Botão
+            bx0, by0, bx1, by1 = self.start_btn
+            hover = getattr(self, 'mouse_x', None) is not None and bx0 <= self.mouse_x <= bx1 and by0 <= getattr(self, 'mouse_y', -1) <= by1
+            btn_color = (80, 140, 90) if hover else (70, 120, 80)
+            arcade.draw_lrbt_rectangle_filled(bx0, bx1, by0, by1, btn_color)
+            arcade.draw_lrbt_rectangle_outline(bx0, bx1, by0, by1, (30, 60, 36), border_width=2)
+            self.button_text.draw()
+            # Textos fixos
+            self.title_text.draw()
+            self.prompt_text.draw()
+            for t in self.controls_texts:
+                t.draw()
+            return
 
         # CÃ©u simples
-        arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 260, SCREEN_HEIGHT, (50, 70, 110))
-        arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, 260, (60, 90, 70))
+        arcade.draw_lrbt_rectangle_filled(0, self.width, 260, self.height, self.sky_color)
+        arcade.draw_lrbt_rectangle_filled(0, self.width, 0, 260, (60, 90, 70))
+        self.sky_list.draw()
         self.clouds.draw()
+        if self.weather.endswith('rain'):
+            self.rain_list.draw()
+            self.bolt_list.draw()
+            # Flash branco rápido simulando relâmpago
+            if getattr(self, 'lightning_flash', 0.0) > 0.0:
+                a = max(0, min(255, int(180 * (self.lightning_flash / 0.15))))
+                if a > 0:
+                    arcade.draw_lrbt_rectangle_filled(0, self.width, 0, self.height, (255, 255, 255, a))
 
         self.wall_list.draw()
         self.enemy_list.draw()
@@ -358,33 +526,43 @@ class GameWindow(arcade.Window):
         self.player_list.draw()
         # Efeitos (slash, espada do baú)
         self.fx_list.draw()
-        # Barras de vida nos inimigos
+        # Barras de vida e nomes sobre inimigos (labels pré-criados para performance)
         for e in self.enemy_list:
-            if getattr(e, 'max_hp', None):
-                w = 28
-                ratio = max(0.0, min(1.0, e.hp / e.max_hp))
-                x0 = e.center_x - w / 2
-                y0 = e.top + 6
+            w = 28
+            ratio = max(0.0, min(1.0, e.hp / e.max_hp))
+            x0 = e.center_x - w / 2
+            y0 = e.top + 6
+            # Barra de vida só aparece após o inimigo sofrer dano
+            if getattr(e, 'show_hp_bar', False) and e.hp > 0:
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + w, y0, y0 + 4, (40, 40, 40))
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + w * ratio, y0, y0 + 4, (80, 220, 100))
+            # Nome do inimigo (textos criados no spawn)
+            if hasattr(e, 'name_text') and hasattr(e, 'name_shadow'):
+                name_y = y0 + (8 if getattr(e, 'show_hp_bar', False) else 2)
+                e.name_shadow.x = e.center_x + 1
+                e.name_shadow.y = name_y - 1
+                e.name_text.x = e.center_x
+                e.name_text.y = name_y
+                e.name_shadow.draw()
+                e.name_text.draw()
         
-        # Banner de upgrade
+        # Banner de upgrade (fade in/out, centralizado) — textos em cache
         if getattr(self, 'banner_timer', 0) > 0:
             t = self.banner_timer
-            fade_in = 0.3
-            fade_out = 0.3
-            total = 3.0
+            fade_in, fade_out, total = 0.3, 0.3, 3.0
             a = 1.0
             if t > total - fade_out:
                 a = max(0.0, (total - t) / fade_out)
             elif t < fade_in:
                 a = max(0.0, t / fade_in)
             alpha = int(255 * a)
-            text = self.banner_text or "Super Espada Adquirida! Dobro de dano ativado!"
-            x = SCREEN_WIDTH // 2 - 280
-            y = SCREEN_HEIGHT - 40
-            arcade.draw_text(text, x + 2, y - 2, (0, 0, 0, alpha), 18)
-            arcade.draw_text(text, x, y, (255, 215, 0, alpha), 18)
+            btxt = self.banner_text or "Super Espada Adquirida! Dobro de dano ativado!"
+            self._ensure_banner_ui(btxt)
+            # Atualiza transparência e desenha
+            self.banner_shadow_text.color = (0, 0, 0, alpha)
+            self.banner_main_text.color = (255, 215, 0, alpha)
+            self.banner_shadow_text.draw()
+            self.banner_main_text.draw()
 
         # Vida do jogador (corações com meio-coração)
         heart_w, heart_h = 18, 12
@@ -392,7 +570,8 @@ class GameWindow(arcade.Window):
         has_half = (self.player_hp - full) >= 0.5
         for i in range(self.player_max_hp):
             x0 = 10 + i * (heart_w + 6)
-            y0 = SCREEN_HEIGHT - 60
+            # espaço único (score ~height-30, corações ~height-60)
+            y0 = self.height - 60
             # base vazia
             arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w, y0, y0 + heart_h, (80, 70, 70))
             if i < full:
@@ -400,55 +579,45 @@ class GameWindow(arcade.Window):
             elif i == full and has_half:
                 arcade.draw_lrbt_rectangle_filled(x0, x0 + heart_w / 2, y0, y0 + heart_h, (220, 60, 80))
         self.score_text.text = f"Score: {self.score}"
+        # alinhar com a margem superior como o timer (usar dimensões atuais)
+        self.score_text.x = 10
+        self.score_text.y = self.height - 30
         self.score_text.draw()
-        # Timer (mm:ss)
+        # Timer (mm:ss) — ancorado no canto superior direito (usar tamanho atual da janela)
         t = max(0, int(self.time_remaining))
         mm, ss = divmod(t, 60)
         self.timer_text.text = f"Tempo: {mm:02d}:{ss:02d}"
         self.timer_text.color = arcade.color.WHITE if self.time_remaining > 30 else arcade.color.SALMON
+        self.timer_text.x = self.width - 10
+        self.timer_text.y = self.height - 30
         self.timer_text.draw()
 
-        # Tela de Game Over
-        if self.game_over:
-            if self.game_over_title is None:
-                self.game_over_title = arcade.Text(
-                    "GAME OVER",
-                    SCREEN_WIDTH // 2 - 140,
-                    SCREEN_HEIGHT // 2 + 80,
-                    arcade.color.WHITE,
-                    32,
-                )
-                self.game_over_prompt = arcade.Text(
-                    "Digite seu nome e pressione Enter:",
-                    SCREEN_WIDTH // 2 - 260,
-                    SCREEN_HEIGHT // 2 + 30,
-                    arcade.color.ANTIQUE_WHITE,
-                    20,
-                )
-                self.game_over_name = arcade.Text(
-                    self.input_name,
-                    SCREEN_WIDTH // 2 - 260,
-                    SCREEN_HEIGHT // 2 - 10,
-                    arcade.color.YELLOW,
-                    20,
-                )
-                self.final_score_text = arcade.Text(
-                    f"Score: {self.score}",
-                    SCREEN_WIDTH // 2 - 260,
-                    SCREEN_HEIGHT // 2 - 50,
-                    arcade.color.LIGHT_GREEN,
-                    20,
-                )
-            # Fundo translÃºcido
-            arcade.draw_lrbt_rectangle_filled(0, SCREEN_WIDTH, 0, SCREEN_HEIGHT, (0, 0, 0, 150))
-            self.game_over_title.draw()
-            self.game_over_prompt.draw()
-            self.game_over_name.text = self.input_name + "_"
-            self.game_over_name.draw()
-            self.final_score_text.text = f"Score: {self.score}"
-            self.final_score_text.draw()
-
+        # Overlays de fim com Top 5 (textos em cache)
+        if self.state in ('victory', 'game_over'):
+            ww, wh = self.width, self.height
+            arcade.draw_lrbt_rectangle_filled(0, ww, 0, wh, (0, 0, 0, 150))
+            self._ensure_end_ui()
+            # Desenha elementos
+            self.end_title_text.draw()
+            self.end_heading_text.draw()
+            for t in self.end_scores_texts:
+                t.draw()
+            self.end_hint_text.draw()
     def on_update(self, delta_time: float):
+        # Estados que não atualizam o mundo
+        if self.state != 'playing':
+            if getattr(self, 'banner_timer', 0) > 0:
+                self.banner_timer -= delta_time
+            # Clean up finished SFX players even when paused/end screens
+            self._cleanup_sfx_players()
+            return
+
+        # Estados que não atualizam o mundo
+        if self.state != 'playing':
+            if getattr(self, 'banner_timer', 0) > 0:
+                self.banner_timer -= delta_time
+            self._cleanup_sfx_players()
+            return
         # Movimento por teclas
         self.player.change_x = 0
         if self.left_pressed and not self.right_pressed:
@@ -460,14 +629,13 @@ class GameWindow(arcade.Window):
 
         # FÃ­sica do jogador
         self.physics_engine.update()
+        # Limpa players de SFX finalizados
+        self._cleanup_sfx_players()
 
         # Timer: perde se acabar o tempo com inimigos restantes
-        if not self.game_over:
-            self.time_remaining = max(0.0, self.time_remaining - delta_time)
-            if self.time_remaining <= 0.0 and len(self.enemy_list) > 0:
-                self.game_over = True
-
-        if self.game_over:
+        self.time_remaining = max(0.0, self.time_remaining - delta_time)
+        if self.time_remaining <= 0.0 and len(self.enemy_list) > 0:
+            self.end_game('game_over')
             return
 
 
@@ -476,8 +644,8 @@ class GameWindow(arcade.Window):
             self.player.left = 0
             if self.player.change_x < 0:
                 self.player.change_x = 0
-        if self.player.right > SCREEN_WIDTH:
-            self.player.right = SCREEN_WIDTH
+        if self.player.right > self.width:
+            self.player.right = self.width
             if self.player.change_x > 0:
                 self.player.change_x = 0
 
@@ -512,16 +680,36 @@ class GameWindow(arcade.Window):
             # Vivo: movimento
             e.center_x += e.change_x
             if e.type == "bat":
-                # Dive logic + patrulha em onda (comportamento anterior)
+                # Patrulha em onda + mergulho controlado (sem perseguir no solo)
+                prev_y = e.center_y
                 if e.diving:
                     e.dive_timer += delta_time
-                    dir_x = 1 if self.player.center_x > e.center_x else -1
-                    e.change_x = (BAT_SPEED + 0.2) * dir_x
-                    if e.center_y > self.player.center_y + 8:
-                        e.center_y -= 4
+                    # Persegue o jogador APENAS enquanto ele estiver no ar
+                    player_on_ground = self.player.bottom <= self.ground_top + 6
+                    target_y = None
+                    if not player_on_ground:
+                        dir_x = 1 if self.player.center_x > e.center_x else -1
+                        e.change_x = (BAT_SPEED + 0.2) * dir_x
+                        target_y = self.player.center_y
+                        if e.center_y > target_y + 8:
+                            e.center_y -= 4
+                        else:
+                            e.center_y += 1  # overshoot leve
                     else:
-                        e.center_y += 1  # overshoot leve
-                    if e.dive_timer > 1.2 or abs(e.center_y - self.player.center_y) < 10:
+                        # Jogador no chão: não perseguir; encerra o mergulho
+                        e.diving = False
+                        e.dive_cooldown = 2.5
+                    # Evita atravessar plataformas durante o rasante
+                    if e.diving and e.center_y < prev_y:
+                        wall_hits = arcade.check_for_collision_with_list(e, self.wall_list)
+                        if wall_hits:
+                            # Encosta no topo da plataforma e encerra o mergulho
+                            top_y = max(w.top for w in wall_hits)
+                            e.bottom = top_y
+                            e.diving = False
+                            e.dive_cooldown = 2.5
+                    # Encerra por tempo ou por alcançar a altura alvo (quando perseguindo no ar)
+                    if e.diving and (e.dive_timer > 1.2 or (target_y is not None and abs(e.center_y - target_y) < 10)):
                         e.diving = False
                         e.dive_cooldown = 2.5
                 else:
@@ -536,6 +724,9 @@ class GameWindow(arcade.Window):
                         if (not player_on_ground) and abs(self.player.center_x - e.center_x) < 240 and e.center_y > self.player.center_y + 40:
                             e.diving = True
                             e.dive_timer = 0.0
+                            # Captura direção/altura no início do mergulho (não persegue depois)
+                            e.dive_dir = 1 if self.player.center_x > e.center_x else -1
+                            e.dive_target_y = self.player.center_y
             if e.center_x < e.bound_left:
                 e.center_x = e.bound_left
                 e.change_x *= -1
@@ -568,12 +759,18 @@ class GameWindow(arcade.Window):
                 dmg = getattr(e, 'contact_damage', 1.0)
                 self.player_hp = max(0.0, self.player_hp - float(dmg))
                 self.player_invuln = PLAYER_INVULN
+                self.play_sfx('hurt', 1.0)
                 # knockback
                 push = 14 if self.player.center_x < e.center_x else -14
                 self.player.center_x += push
-                if self.player_hp <= 0.0:
-                    self.game_over = True
+            if self.player_hp <= 0.0:
+                    self.end_game('game_over')
                     return
+
+        # Vitória: todos os inimigos foram derrotados
+        if self.state == 'playing' and len(self.enemy_list) == 0:
+            self.end_game('victory')
+            return
 
         # Ataque simples com hitbox na direÃ§Ã£o do guerreiro
         if self.is_attacking:
@@ -594,6 +791,11 @@ class GameWindow(arcade.Window):
                     self.enemies_hit.add(h)
                     # dano/knockback
                     h.hp -= self.player_damage
+                    # Exibir barra de vida a partir do primeiro dano
+                    try:
+                        h.show_hp_bar = True
+                    except Exception:
+                        pass
                     if h.hp <= 0:
                         h.dead = True
                         h.death_timer = 0.0
@@ -642,6 +844,7 @@ class GameWindow(arcade.Window):
             if hasattr(item, 'is_heart') and item.is_heart:
                 if self.player_hp < float(self.player_max_hp):
                     self.player_hp = min(float(self.player_max_hp), self.player_hp + 1.0)
+                self.play_sfx('pickup', 1.0)
                 item.remove_from_sprite_lists()
             elif hasattr(item, 'is_chest') and item.is_chest:
                 # Upgrade de espada: dobra o dano e mostra efeitos
@@ -658,15 +861,73 @@ class GameWindow(arcade.Window):
                 self.fx_list.append(fx)
                 self.banner_text = "Super Espada Adquirida! Dobro de dano ativado!"
                 self.banner_timer = 3.0
+                self.play_sfx('powerup', 1.0)
                 item.remove_from_sprite_lists()
 
         # Banner
         if getattr(self, 'banner_timer', 0) > 0:
             self.banner_timer -= delta_time
-        # Coleta de pickups (coraÃ§Ãµes)
 
+        # --- Clima dinâmico ---
+        if self.weather.endswith('rain'):
+            # movimento das gotas
+            for d in self.rain_list:
+                d.center_y -= d.speed * delta_time
+                d.center_x += d.wind * delta_time
+                if d.center_y < 260:
+                    d.center_y = self.height + random.randint(0, 80)
+                    d.center_x = random.randint(0, self.width)
+            # relâmpagos ocasionais
+            if self.lightning_cd > 0:
+                self.lightning_cd -= delta_time
+            else:
+                if random.random() < 0.02:
+                    bolt = arcade.Sprite()
+                    bolt.texture = make_lightning_texture(8, 140)
+                    bolt.center_x = random.randint(120, self.width - 120)
+                    bolt.center_y = random.randint(int(self.height * 0.7), self.height - 40)
+                    bolt.alpha = 255
+                    bolt.life = 0.0
+                    self.bolt_list.append(bolt)
+                    self.lightning_flash = 0.15
+                    self.lightning_cd = 2.5
+            # atenua/some com raios
+            for b in list(self.bolt_list):
+                b.life += delta_time
+                b.alpha = max(0, int(255 * (1.0 - b.life / 0.2)))
+                if b.life >= 0.2:
+                    b.remove_from_sprite_lists()
+            if self.lightning_flash > 0:
+                self.lightning_flash = max(0.0, self.lightning_flash - delta_time)
 
     def on_key_press(self, key, modifiers):
+        # Entrada na tela de título
+        if self.state == 'title':
+            if key == arcade.key.ENTER:
+                # Exige nome para iniciar
+                if (self.player_name or '').strip():
+                    self.start_game()
+                return
+            elif key == arcade.key.BACKSPACE:
+                self.player_name = self.player_name[:-1]
+                return
+            elif key == arcade.key.ESCAPE:
+                self.close()
+                return
+            # Não adicionar caracteres aqui para evitar duplicação com on_text
+            return
+
+        # Tela de Game Over / Vitória
+        if self.state in ('game_over', 'victory'):
+            if key == arcade.key.ENTER:
+                # Volta ao título e reinicia o mundo
+                self.state = 'title'
+                self.setup()
+                return
+            elif key == arcade.key.ESCAPE:
+                self.close()
+                return
+
         if self.game_over:
             if key == arcade.key.ENTER:
                 self.save_score(self.input_name.strip() or "Player", self.score)
@@ -681,16 +942,18 @@ class GameWindow(arcade.Window):
             self.left_pressed = True
         elif key == arcade.key.RIGHT:
             self.right_pressed = True
-        elif key == arcade.key.SPACE:
+        elif key == arcade.key.UP:
             if self.physics_engine and self.physics_engine.can_jump():
                 self.player.change_y = PLAYER_JUMP_SPEED
-        elif key == arcade.key.Z or key == arcade.key.Q:
+        elif key == arcade.key.SPACE:
             if not self.is_attacking:
                 self.is_attacking = True
                 self.attack_time = ATTACK_DURATION
                 self.enemies_hit = set()
+                self.play_sfx('attack', 1.0)
         elif key == arcade.key.ESCAPE:
             self.close()
+
     def on_key_release(self, key, modifiers):
         if key == arcade.key.LEFT:
             self.left_pressed = False
@@ -698,6 +961,10 @@ class GameWindow(arcade.Window):
             self.right_pressed = False
 
     def on_text(self, text: str):
+        if self.state == 'title':
+            if len(text) == 1 and text.isprintable() and len(self.player_name) < 16:
+                self.player_name += text
+            return
         if self.game_over:
             if len(text) == 1 and text.isprintable() and len(self.input_name) < 16:
                 self.input_name += text
@@ -718,14 +985,368 @@ class GameWindow(arcade.Window):
         chest.is_chest = True
         self.pickup_list.append(chest)
 
+    def end_game(self, status: str):
+        # status: 'game_over' ou 'victory'
+        try:
+            # Registra score no banco
+            self.record_score(self.player_name.strip() or 'Player', int(self.score))
+        except Exception:
+            # Fallback em arquivo
+            try:
+                self.save_score(self.player_name.strip() or 'Player', int(self.score))
+            except Exception:
+                pass
+        # Atualiza top scores em memória
+        try:
+            self.top_scores = self.get_top_scores(5)
+        except Exception:
+            self.top_scores = []
+        # Ajusta estado
+        self.state = status
+        self.game_over = (status == 'game_over')
+        # Para o banner caso esteja ativo
+        self.banner_timer = 0.0
+        # Sons finais por estado
+        try:
+            if status == 'game_over':
+                self.play_sfx('game_over', 1.0)
+            elif status == 'victory':
+                self.play_sfx('victory', 1.0)
+        except Exception:
+            pass
+
+    # --- Efeitos sonoros (SFX) ---
+    def init_sfx(self):
+        self.sfx = {
+            'attack': self._make_sfx_attack(),
+            'hurt': self._make_sfx_hurt(),
+            'powerup': self._make_sfx_powerup(),
+            'pickup': self._make_sfx_pickup(),
+            'game_over': self._make_sfx_game_over(),
+            'victory': self._make_sfx_victory(),
+        }
+
+    def play_sfx(self, name: str, volume: float = 1.0):
+        src = self.sfx.get(name)
+        if not src:
+            return
+        try:
+            player = pyglet.media.Player()
+            # Volume em escala 0.0 a 1.0 (100%)
+            player.volume = max(0.0, min(1.0, float(volume)))
+            player.queue(src)
+            player.play()
+            # Mant�m refer�ncia at� terminar para n�o cortar o som
+            self._sfx_players.append(player)
+        except Exception:
+            pass
+
+    def _cleanup_sfx_players(self):
+        # Remove players que j� finalizaram a reprodu��o
+        alive = []
+        for p in self._sfx_players:
+            try:
+                if getattr(p, 'playing', False):
+                    alive.append(p)
+                else:
+                    try:
+                        p.delete()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        self._sfx_players = alive
+
+    def _make_pcm(self, samples: array, rate: int = 22050):
+        bio = io.BytesIO()
+        with wave.open(bio, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(rate)
+            wf.writeframes(samples.tobytes())
+        bio.seek(0)
+        try:
+            return pyglet.media.load('sfx.wav', file=bio, streaming=False)
+        except Exception:
+            return None
+
+    def _make_sfx_attack(self):
+        rate = 22050
+        dur = 0.18
+        n = int(rate * dur)
+        buf = array('h', [0] * n)
+        for i in range(n):
+            t = i / rate
+            f = 220 + 880 * (1 - t / dur)
+            env = max(0.0, 1.0 - t / dur)
+            v = int(3000 * env * math.sin(2 * math.pi * f * t))
+            buf[i] = v
+        return self._make_pcm(buf, rate)
+
+    def _make_sfx_hurt(self):
+        rate = 22050
+        dur = 0.15
+        n = int(rate * dur)
+        buf = array('h', [0] * n)
+        noise = 0.4
+        for i in range(n):
+            t = i / rate
+            f = 160
+            env = max(0.0, 1.0 - t / dur)
+            s = math.sin(2 * math.pi * f * t)
+            v = int(2500 * env * (0.6 * s + noise * (random.random() * 2 - 1)))
+            buf[i] = v
+        return self._make_pcm(buf, rate)
+
+    def _make_sfx_powerup(self):
+        rate = 22050
+        dur = 0.35
+        n = int(rate * dur)
+        buf = array('h', [0] * n)
+        for i in range(n):
+            t = i / rate
+            f = 600 + 900 * (t / dur)
+            env = 0.6 if t < dur * 0.7 else 0.6 * (1 - (t - dur * 0.7) / (dur * 0.3))
+            v = int(2500 * max(0.0, env) * math.sin(2 * math.pi * f * t))
+            buf[i] = v
+        return self._make_pcm(buf, rate)
+
+    def _make_sfx_pickup(self):
+        # Two quick rising beeps
+        rate = 22050
+        segments = [(880, 0.08), (1320, 0.10)]
+        out = array('h')
+        for freq, dur in segments:
+            n = int(rate * dur)
+            for i in range(n):
+                t = i / rate
+                env = max(0.0, 1.0 - (t / dur))
+                s = math.sin(2 * math.pi * freq * t)
+                out.append(int(2600 * env * s))
+            # tiny gap
+            gap = int(rate * 0.01)
+            out.extend([0] * gap)
+        return self._make_pcm(out, rate)
+
+    def _make_sfx_game_over(self):
+        # Three descending tones
+        rate = 22050
+        segments = [(440, 0.18), (330, 0.18), (262, 0.22)]
+        out = array('h')
+        for freq, dur in segments:
+            n = int(rate * dur)
+            for i in range(n):
+                t = i / rate
+                # Slow decay per segment
+                env = max(0.0, 1.0 - 0.9 * (t / dur))
+                s = math.sin(2 * math.pi * freq * t)
+                out.append(int(3000 * env * s))
+            out.extend([0] * int(rate * 0.015))
+        return self._make_pcm(out, rate)
+
+    def _make_sfx_victory(self):
+        # Simple ascending fanfare
+        rate = 22050
+        segments = [(784, 0.16), (988, 0.16), (1176, 0.20)]
+        out = array('h')
+        for freq, dur in segments:
+            n = int(rate * dur)
+            for i in range(n):
+                t = i / rate
+                # Quick attack, short release
+                env = 1.0 if t < dur * 0.85 else max(0.0, 1.0 - (t - dur * 0.85) / (dur * 0.15))
+                s = math.sin(2 * math.pi * freq * t)
+                out.append(int(2800 * env * s))
+            out.extend([0] * int(rate * 0.012))
+        return self._make_pcm(out, rate)
+
+    # --- Entradas de mouse para tela inicial ---
+    def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
+        self.mouse_x, self.mouse_y = x, y
+
+    def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
+        if self.state == 'title' and getattr(self, 'start_btn', None):
+            bx0, by0, bx1, by1 = self.start_btn
+            if bx0 <= x <= bx1 and by0 <= y <= by1:
+                # Exige nome para iniciar
+                if (self.player_name or '').strip():
+                    self.start_game()
+
+    # --- Helpers ---
+    def start_game(self):
+        self.player_name = (self.player_name or 'Player').strip()[:16]
+        try:
+            self.save_profile(self.player_name)
+        except Exception:
+            pass
+        self.state = 'playing'
+        self.setup()
+        # Sons do jogo (ataque, dano, powerup)
+        self.init_sfx()
+
+    def _ensure_title_ui(self):
+        # Recria textos quando necessário (primeira vez ou redimensionamento)
+        need_build = False
+        if not hasattr(self, '_title_ui_size'):
+            need_build = True
+        elif self._title_ui_size != (self.width, self.height):
+            need_build = True
+
+        if not need_build:
+            # Ainda precisamos atualizar o texto do nome (feito no on_draw) —
+            # mas layout/posições permanecem
+            return
+
+        self._title_ui_size = (self.width, self.height)
+        cx, cy = self.width // 2, self.height // 2
+        title_size = int(min(self.width, self.height) * 0.04)
+        prompt_size = int(title_size * 0.5)
+        btn_w = int(self.width * 0.16)
+        btn_h = max(36, int(self.height * 0.038))
+        box_w = btn_w
+        box_h = max(32, int(self.height * 0.03))
+
+        # Título e prompt
+        self.title_text = arcade.Text(
+            "Warrior Platform", cx, cy + int(self.height * 0.13), arcade.color.GOLD, title_size, anchor_x="center"
+        )
+        prompt_y = cy + int(self.height * 0.065)
+        self.prompt_text = arcade.Text(
+            "Digite seu nome:", cx, prompt_y, arcade.color.ANTIQUE_WHITE, prompt_size, anchor_x="center"
+        )
+
+        # Caixa de nome
+        x0, x1 = cx - box_w // 2, cx + box_w // 2
+        gap = int(prompt_size * 1.2)
+        y1 = prompt_y - gap
+        y0 = y1 - box_h
+        self._title_box = (x0, y0, x1, y1)
+        input_font = max(18, int(prompt_size * 0.9))
+        field_cx = (x0 + x1) // 2
+        self.name_field_text = arcade.Text("", field_cx, y0 + (box_h - input_font) // 2, arcade.color.WHITE, input_font, anchor_x="center")
+
+        # Botão iniciar
+        bx0, bx1 = cx - btn_w // 2, cx + btn_w // 2
+        btn_gap = int(self.height * 0.03)
+        by0 = y0 - btn_gap - btn_h
+        by1 = by0 + btn_h
+        self.start_btn = (bx0, by0, bx1, by1)
+        self.button_text = arcade.Text(
+            "Começar Jogo (Enter)", cx, by0 + (btn_h - prompt_size) // 2, arcade.color.WHITE, max(20, int(prompt_size * 0.9)), anchor_x="center"
+        )
+
+        # Manual de controles
+        manual_size = max(14, int(prompt_size * 0.75))
+        line_gap = max(22, int(manual_size * 1.4))
+        spacing = max(26, int(btn_h * 1.0))
+        base_y = by0 - spacing
+        controls = [
+            "Setas Esquerda/Direita: Mover",
+            "Seta para Cima: Pular",
+            "Barra de Espaço: Atacar",
+            "ENTER: Iniciar   |   ESC: Sair",
+        ]
+        self.controls_texts = []
+        for i, txt in enumerate(controls):
+            self.controls_texts.append(
+                arcade.Text(txt, cx, base_y - i * line_gap, arcade.color.LIGHT_GRAY, manual_size, anchor_x="center")
+            )
+
+    def _ensure_end_ui(self):
+        # Garante top_scores preenchido
+        if not getattr(self, 'top_scores', None):
+            try:
+                self.top_scores = self.get_top_scores(5)
+            except Exception:
+                self.top_scores = []
+
+        ww, wh = self.width, self.height
+        key = (ww, wh, self.state, tuple((nm, int(sc)) for (nm, sc) in (self.top_scores or [])))
+        if getattr(self, '_end_ui_key', None) == key:
+            return
+        self._end_ui_key = key
+
+        # Título (Venceu/Game Over)
+        title_txt = "VOCÊ VENCEU!" if self.state == 'victory' else "GAME OVER"
+        self.end_title_text = arcade.Text(title_txt, ww // 2, wh // 2 + 140, arcade.color.WHITE, 32, anchor_x="center")
+        # Cabeçalho Top 5
+        self.end_heading_text = arcade.Text("Top 5 Scores:", ww // 2, wh // 2 + 100, arcade.color.ANTI_FLASH_WHITE, 20, anchor_x="center")
+        # Linhas Top 5
+        self.end_scores_texts = []
+        y = wh // 2 + 70
+        for i, (nm, sc) in enumerate((self.top_scores or [])[:5], start=1):
+            col = arcade.color.GOLD if i == 1 else arcade.color.WHITE
+            self.end_scores_texts.append(arcade.Text(f"{i}. {nm} - {sc}", ww // 2, y, col, 18, anchor_x="center"))
+            y -= 24
+        # Dica
+        self.end_hint_text = arcade.Text("Pressione ENTER para voltar ao título", ww // 2, wh // 2 - 60, arcade.color.LIGHT_GRAY, 16, anchor_x="center")
+
+    def _ensure_banner_ui(self, text: str):
+        # Reconstrói textos do banner ao mudar tamanho da janela ou conteúdo
+        win_w, win_h = self.width, self.height
+        key = (text, win_w, win_h)
+        if getattr(self, '_banner_ui_key', None) == key and hasattr(self, 'banner_main_text'):
+            return
+        self._banner_ui_key = key
+        banner_shift = int(win_w * 0.015)  # ~0.7% da largura
+        # Sombra
+        self.banner_shadow_text = arcade.Text(text, win_w // 2 + banner_shift + 2, win_h - 42, (0, 0, 0, 255), 18, anchor_x="center")
+        # Principal
+        self.banner_main_text = arcade.Text(text, win_w // 2 + banner_shift, win_h - 40, (255, 215, 0, 255), 18, anchor_x="center")
+
+        # --- Persistência (SQLite + fallback em arquivo) ---
+    def ensure_db(self):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("CREATE TABLE IF NOT EXISTS players (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)")
+            cur.execute("CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY AUTOINCREMENT, player_name TEXT, score INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+            conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def save_profile(self, name: str):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("INSERT OR IGNORE INTO players(name) VALUES (?)", (name.strip() or 'Player',))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def record_score(self, name: str, score: int):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("INSERT INTO scores(player_name, score) VALUES (?, ?)", (name.strip() or 'Player', int(score)))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_top_scores(self, limit: int = 5):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("SELECT player_name, MAX(score) as s FROM scores GROUP BY player_name ORDER BY s DESC LIMIT ?", (limit,))
+            return cur.fetchall()
+        except Exception:
+            return []
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     def save_score(self, name: str, score: int):
+        # Fallback em arquivo (além do SQLite)
         try:
             with open("scores.txt", "a", encoding="utf-8") as f:
                 f.write(f"{name};{score}\n")
         except Exception:
             pass
-
-
 def main():
     GameWindow()
     arcade.run()
@@ -733,6 +1354,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
 
