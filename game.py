@@ -1,4 +1,4 @@
-﻿import arcade
+import arcade
 import random
 import math
 import sqlite3
@@ -7,6 +7,7 @@ import time
 import io
 import wave
 from array import array
+from PIL import Image
 import pyglet
 from assets.sprites import (
     make_warrior_textures,
@@ -240,12 +241,25 @@ class GameWindow(arcade.Window):
         # Centraliza a plataforma baixa
         plat.center_x = self.width // 2
         plat.center_y = 150
-        self.wall_list.append(plat)
 
         # Escadas de plataformas (altura de pulo ~120px)
         # Centralizadas em relação ao centro da tela. Distâncias pequenas para permitir pulos entre as superiores.
         stair_tex_w = 180
         stair_tex = make_platform_texture(stair_tex_w, 20)
+        def _tinted_platform(base_texture: arcade.Texture, suffix: str, color: tuple[int, int, int], blend: float) -> arcade.Texture:
+            base_img = base_texture.image.copy()
+            overlay = Image.new("RGBA", base_img.size, (color[0], color[1], color[2], 255))
+            tinted = Image.blend(base_img, overlay, blend)
+            base_name = getattr(base_texture, "name", None) or "platform"
+            return arcade.Texture(name=f"{base_name}_{suffix}", image=tinted)
+
+        green_platform_tex = _tinted_platform(stair_tex, "ivy", (70, 130, 90), 0.35)
+        dry_platform_tex = _tinted_platform(stair_tex, "dry", (184, 134, 72), 0.32)
+        blood_platform_tex = _tinted_platform(stair_tex, "blood", (170, 50, 50), 0.30)
+
+        plat.texture = _tinted_platform(plat_tex, "ivy_main", (70, 130, 90), 0.35)
+        self.wall_list.append(plat)
+
         max_jump_px = int((PLAYER_JUMP_SPEED ** 2) / (2 * GRAVITY))
         step_h = int(max_jump_px * 0.78)
         center_x = self.width // 2
@@ -257,7 +271,12 @@ class GameWindow(arcade.Window):
         row3_stairs = []
         for x, y in stairs_left + stairs_right:
             p = arcade.Sprite()
-            p.texture = stair_tex
+            if y == ground.top + step_h * 2:
+                p.texture = dry_platform_tex
+            elif y == ground.top + step_h * 3:
+                p.texture = blood_platform_tex
+            else:
+                p.texture = stair_tex
             p.center_x = x
             p.center_y = y
             self.wall_list.append(p)
@@ -282,7 +301,7 @@ class GameWindow(arcade.Window):
             for dx in row:
                 ex = center_x + dx
                 ep = arcade.Sprite()
-                ep.texture = stair_tex
+                ep.texture = green_platform_tex if i == 0 else dry_platform_tex
                 ep.center_x = ex
                 ep.center_y = y
                 self.wall_list.append(ep)

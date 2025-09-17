@@ -27,6 +27,7 @@ Bem-vindo ao Warrior Platform, um platformer 2D com combate simples, IA variada 
 ## VisÃ£o Geral
 - Objetivo: derrotar todos os inimigos antes que o tempo acabe, preservando sua vida. Colete coraÃ§Ãµes e pegue a Super Espada para dobrar seu dano.
 - Mundo: terreno com plataformas centrais e escadarias, spawns de inimigos no chÃ£o e andares, e um baÃº no topo com upgrade de espada.
+- Plataformas tematizadas: o andar dos goblins recebe um matiz esverdeado (heras), o dos trolls fica alaranjado (vegetação árida) e o dos orcs ganha manchas vermelhas lembrando sangue, enquanto a base do baú permanece com o tom marrom original.
 - Estilo: pixels gerados por cÃ³digo (sprites), clima dinÃ¢mico e efeitos simples que deixam a tela viva e legÃ­vel.
 
 
@@ -152,6 +153,7 @@ ReferÃªncias no cÃ³digo:
 
 
 ## Clima e Efeitos Visuais
+- Plataformas com tonalização temática: verde para o nível dos goblins, laranja árido para os trolls e vermelho marcante para os orcs, mantendo o patamar do baú com a madeira clássica.
 - Climas possÃ­veis: dia ensolarado, dia nublado, dia chuvoso, noite limpa, noite nublada, noite chuvosa.
 - Nuvens: densidade/alpha variam por clima.
 - Chuva: gotas com vento e relÃ¢mpagos ocasionais com â€œflashâ€ na tela.
