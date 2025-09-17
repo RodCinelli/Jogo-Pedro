@@ -458,6 +458,87 @@ def make_goblin_textures(base=(60, 170, 90, 255)):
     }
 
 
+
+
+def make_troll_textures(base=(210, 120, 50, 255)):
+    """Cria texturas de troll alaranjado com animações de caminhada, dano e morte."""
+    w, h = 38, 46
+
+    body = base
+    dark = (130, 60, 30, 255)
+    eye = (20, 20, 20, 255)
+    belt = (120, 80, 40, 255)
+    tusk = (240, 230, 210, 255)
+    hair = (255, 190, 110, 255)
+    club = (150, 100, 50, 255)
+    club_dark = (100, 60, 30, 255)
+
+    def frame(phase: int):
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        # Pernas alternadas com leve oscilação vertical
+        leg_shift = [0, 3, 0, 3][phase % 4]
+        off = 1 if phase % 2 == 0 else -1
+        d.rectangle([10 + off, 2, 14 + off, 12 + leg_shift], fill=dark)
+        d.rectangle([22 - off, 2, 26 - off, 12 + (3 - leg_shift)], fill=dark)
+        # Braço esquerdo relaxado
+        d.rectangle([6, 18, 10, 30], fill=body, outline=dark)
+        # Braço direito segurando um porrete
+        club_y0 = 18 + (1 if phase % 2 == 0 else 0)
+        d.rectangle([28, club_y0, 32, club_y0 + 10], fill=club, outline=club_dark)
+        d.ellipse([27, club_y0 + 8, 35, club_y0 + 18], fill=club, outline=club_dark)
+        d.rectangle([26, 18, 30, 32], fill=body, outline=dark)
+        # Tronco largo
+        d.rectangle([8, 14, 30, 32], fill=body, outline=dark)
+        # Cinto
+        d.rectangle([8, 22, 30, 24], fill=belt)
+        # Cabeça com cabelo desgrenhado
+        d.rectangle([10, 32, 28, 42], fill=body, outline=dark)
+        d.polygon([(10, 42), (8, 46), (14, 44)], fill=hair)
+        d.polygon([(28, 42), (30, 46), (24, 44)], fill=hair)
+        d.rectangle([12, 42, 26, 44], fill=hair)
+        # Olhos e presas
+        d.rectangle([14, 36, 16, 38], fill=eye)
+        d.rectangle([22, 36, 24, 38], fill=eye)
+        d.rectangle([16, 34, 18, 36], fill=tusk)
+        d.rectangle([20, 34, 22, 36], fill=tusk)
+        # Nariz
+        d.rectangle([18, 36, 20, 38], fill=dark)
+        return img
+
+    walk = [frame(i) for i in range(4)]
+
+    def tint(img, a=70):
+        c = Image.new("RGBA", img.size, (255, 255, 255, a))
+        return Image.alpha_composite(img, c)
+
+    hurt = [tint(walk[1]), tint(walk[2])]
+
+    def shrink(img, s):
+        w0, h0 = img.size
+        nw, nh = int(w0 * s), int(h0 * s)
+        tmp = img.resize((nw, nh), Image.NEAREST)
+        pad = Image.new("RGBA", (w0, h0), (0, 0, 0, 0))
+        pad.paste(tmp, ((w0 - nw) // 2, 2))
+        return pad
+
+    die = [shrink(walk[0], 0.8), shrink(walk[0], 0.55), shrink(walk[0], 0.3)]
+
+    def tex(name, img):
+        return arcade.Texture(name=name, image=ImageOps.flip(img))
+
+    def mirror(img):
+        return ImageOps.mirror(img)
+
+    return {
+        "walk_right": [tex("troll_r0", walk[0]), tex("troll_r1", walk[1]), tex("troll_r2", walk[2]), tex("troll_r3", walk[3])],
+        "walk_left": [tex("troll_l0", mirror(walk[0])), tex("troll_l1", mirror(walk[1])), tex("troll_l2", mirror(walk[2])), tex("troll_l3", mirror(walk[3]))],
+        "hurt_right": [tex("troll_hr0", hurt[0]), tex("troll_hr1", hurt[1])],
+        "hurt_left": [tex("troll_hl0", mirror(hurt[0])), tex("troll_hl1", mirror(hurt[1]))],
+        "die_right": [tex("troll_dr0", die[0]), tex("troll_dr1", die[1]), tex("troll_dr2", die[2])],
+        "die_left": [tex("troll_dl0", mirror(die[0])), tex("troll_dl1", mirror(die[1])), tex("troll_dl2", mirror(die[2]))],
+    }
+
 def make_orc_textures(base=(200, 70, 70, 255)):
     """Texturas de um orc vermelho que anda (walk/hurt/die).
 

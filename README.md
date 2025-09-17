@@ -93,22 +93,27 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (30%).
 - Slime
   - HP: 3
   - Dano de contato: 0.5
-  - Velocidade: 1.4
+  - Velocidade: 1.5
   - Padrão: anda pra frente e pra trás em um corredor (ping‑pong).
 - Goblin
   - HP: 3
   - Dano de contato: 1.0
-  - Velocidade: 2.2
+  - Velocidade: 2.0
   - Padrão: anda (ping‑pong) em plataformas dos andares.
-- Orc
+- Troll
   - HP: 4
+  - Dano de contato: 1.0
+  - Velocidade: 1.8
+  - Padrão: anda (ping‑pong) nas plataformas superiores; substitui os goblins das pontas do segundo andar e exibe pele alaranjada.
+- Orc
+  - HP: 5
   - Dano de contato: 1.5
-  - Velocidade: 1.6
+  - Velocidade: 1.5
   - Padrão: anda (ping‑pong), mais lento e mais resistente.
 - Bat
   - HP: 2
   - Dano de contato: 1.0
-  - Velocidade base: 2.6 (um pouco mais rápido que goblin)
+  - Velocidade base: 2.5 (um pouco mais rápida que os walkers)
   - Voo normal: trajetória em onda (amplitude moderada) ao redor da altura inicial.
   - Rasante (ataque mergulhando):
     - Ativa quando o jogador está no ar, próximo horizontalmente (< ~240 px), e o bat está acima.
@@ -125,6 +130,7 @@ Referências no código:
 - Nome sempre visível sobre cada inimigo, com cor temática do tipo:
   - Slime: verde (80, 200, 120)
   - Goblin: verde (60, 170, 90)
+  - Troll: laranja (230, 140, 70)
   - Orc: vermelho (200, 70, 70)
   - Bat: roxo (150, 100, 200)
 - Barra de vida: só aparece após o inimigo sofrer dano pela primeira vez; antes disso, apenas o nome é mostrado.
@@ -156,7 +162,7 @@ Referências no código:
 
 ## Áudio e Arte
 - Sons: gerados proceduralmente (ataque, dano, pegar item, power‑up, vitória, game over) via Pyglet.
-- Sprites: gerados por código com PIL (guerreiro, slimes, goblins, orcs, bats, coração, baú, efeitos, clima).
+- Sprites: gerados por código com PIL (guerreiro, slimes, goblins, trolls, orcs, bats, coração, baú, efeitos, clima).
 
 Referências no código:
 - SFX: `game.py:992–1160`

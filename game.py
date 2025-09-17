@@ -16,6 +16,7 @@ from assets.sprites import (
     make_bat_textures,
     make_heart_texture,
     make_chest_texture,
+    make_troll_textures,
     make_orc_textures,
     make_goblin_textures,
     make_cloud_texture,
@@ -38,10 +39,11 @@ GRAVITY = 0.6
 
 ENEMY_SPEED = 2.0
 # Velocidades por tipo (ajustadas)
-SLIME_SPEED = 1.4
-GOBLIN_SPEED = 2.2
-ORC_SPEED = 1.6
-BAT_SPEED = GOBLIN_SPEED + 0.4  # morcego um pouco mais rápido que goblin
+SLIME_SPEED = 1.5
+GOBLIN_SPEED = 2.0
+TROLL_SPEED = 1.8
+ORC_SPEED = 1.5
+BAT_SPEED = 2.5  # morcego ligeiramente mais rápido que os walkers
 ATTACK_DURATION = 0.36
 ATTACK_HIT_START = 0.12
 ATTACK_HIT_END = 0.28
@@ -324,14 +326,14 @@ class GameWindow(arcade.Window):
         for x, top, mn, mx in row1_extras:
             self.spawn_goblin(x=x, y=top, min_x=mn, max_x=mx)
 
-        # Segundo andar (extras nível 2): 2 goblins nas pontas + 1 orc no centro
+        # Segundo andar (extras nível 2): 2 trolls nas pontas + 1 orc no centro
         if row2_extras:
             row2_sorted = sorted(row2_extras, key=lambda t: t[0])
-            # pontas -> goblins
+            # pontas -> trolls
             gx, gt, gmn, gmx = row2_sorted[0]
-            self.spawn_goblin(x=gx, y=gt, min_x=gmn, max_x=gmx)
+            self.spawn_troll(x=gx, y=gt, min_x=gmn, max_x=gmx)
             gx, gt, gmn, gmx = row2_sorted[-1]
-            self.spawn_goblin(x=gx, y=gt, min_x=gmn, max_x=gmx)
+            self.spawn_troll(x=gx, y=gt, min_x=gmn, max_x=gmx)
             # centro -> orc
             mid_idx = len(row2_sorted) // 2
             ox, ot, omn, omx = row2_sorted[mid_idx]
@@ -447,6 +449,38 @@ class GameWindow(arcade.Window):
         enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
+
+    def spawn_troll(self, x: float, y: float, min_x: float, max_x: float):
+        enemy = arcade.Sprite()
+        enemy_tex = make_troll_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["walk_right"][0]
+        enemy.center_x = x
+        enemy.bottom = y
+        enemy.change_x = TROLL_SPEED
+        enemy.bound_left = min_x
+        enemy.bound_right = max_x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = True
+        enemy.type = "troll"
+        # Nome/color do inimigo
+        enemy.display_name = "Troll"
+        enemy.name_color = (230, 140, 70, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
+        enemy.max_hp = 4
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        enemy.contact_damage = 1.0
+        enemy.show_hp_bar = False
+        self.enemy_list.append(enemy)
+
+
     def spawn_orc(self, x: float, y: float, min_x: float, max_x: float):
         enemy = arcade.Sprite()
         enemy_tex = make_orc_textures()
@@ -467,7 +501,7 @@ class GameWindow(arcade.Window):
         enemy.name_font = 12
         enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
         enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
-        enemy.max_hp = 4
+        enemy.max_hp = 5
         enemy.hp = enemy.max_hp
         enemy.hurt_timer = 0.0
         enemy.dead = False
@@ -661,7 +695,7 @@ class GameWindow(arcade.Window):
                     e.remove_from_sprite_lists()
                     continue
                 # animação de morte
-                if e.type in ("slime", "goblin", "orc"):
+                if e.type in ("slime", "goblin", "troll", "orc"):
                     e.facing_right = e.change_x >= 0
                     idx = min(int(e.death_timer / 0.15), 2)
                     key = "die_right" if e.facing_right else "die_left"
@@ -732,8 +766,8 @@ class GameWindow(arcade.Window):
                 e.hurt_timer -= delta_time
                 if e.anim_timer > 0.12:
                     e.anim_timer = 0
-                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "orc") else 4)
-                if e.type in ("slime", "goblin", "orc"):
+                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "troll", "orc") else 4)
+                if e.type in ("slime", "goblin", "troll", "orc"):
                     key = "hurt_right" if e.facing_right else "hurt_left"
                 else:
                     key = "fly_right" if e.facing_right else "fly_left"
@@ -741,7 +775,7 @@ class GameWindow(arcade.Window):
                 if e.anim_timer > 0.18:
                     e.anim_timer = 0
                     e.anim_index = (e.anim_index + 1) % 4
-                if e.type in ("slime", "goblin", "orc"):
+                if e.type in ("slime", "goblin", "troll", "orc"):
                     key = "walk_right" if e.facing_right else "walk_left"
                 else:  # bat
                     key = "fly_right" if e.facing_right else "fly_left"
