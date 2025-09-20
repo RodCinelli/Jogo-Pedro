@@ -127,11 +127,11 @@ class GameWindow(arcade.Window):
         self.arrow_textures = make_arrow_textures(28, 6)
         self.score = 0
         self.score_text = arcade.Text("Score: 0", 10, self.height - 30, arcade.color.WHITE, 16)
-        # Timer de 5 minutos
-        self.time_limit = 300.0
+        # Timer de 10 minutos
+        self.time_limit = 600.0
         self.time_remaining = self.time_limit
         # Posição inicial baseada no tamanho atual da janela
-        self.timer_text = arcade.Text("Tempo: 05:00", self.width - 10, self.height - 30, arcade.color.WHITE, 16, anchor_x="right")
+        self.timer_text = arcade.Text("Tempo: 10:00", self.width - 10, self.height - 30, arcade.color.WHITE, 16, anchor_x="right")
         self.player_hp = float(self.player_max_hp)
         self.player_invuln = 0.0
         self.player_damage = 1
@@ -268,7 +268,7 @@ class GameWindow(arcade.Window):
         snow_tex_w = 440
         snow_base_tex = make_platform_texture(snow_tex_w, 20)
         snow_platform_tex = _tinted_platform(snow_base_tex, "snow", (235, 240, 255), 0.55)
-        snow_step_w = 230
+        snow_step_w = 280
         snow_step_base = make_platform_texture(snow_step_w, 18)
         snow_step_tex = _tinted_platform(snow_step_base, "snow_step", (235, 240, 255), 0.55)
 
@@ -356,7 +356,7 @@ class GameWindow(arcade.Window):
         self.fifth_platforms = fifth_platforms
 
         if fifth_platforms:
-            edge_offset = snow_step_w // 2 - 220
+            edge_offset = snow_step_w // 2 - 270
             for idx, (cx, top, mn, mx) in enumerate(fifth_platforms):
                 facing_right = (idx == 0)
                 spawn_x = cx + (edge_offset if facing_right else -edge_offset)
@@ -545,13 +545,13 @@ class GameWindow(arcade.Window):
         enemy.name_font = 12
         enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
         enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
-        enemy.max_hp = 4
+        enemy.max_hp = 5
         enemy.hp = enemy.max_hp
         enemy.hurt_timer = 0.0
         enemy.dead = False
         enemy.death_timer = 0.0
         enemy.scored = False
-        enemy.contact_damage = 1.0
+        enemy.contact_damage = 1.5
         enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 

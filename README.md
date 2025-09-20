@@ -64,6 +64,7 @@ Observações:
 
 
 ## Mecânicas do Jogador
+- Tempo de jogo: 10 minutos (600s).
 - Vida máxima: 5 corações (meio coração possível).
 - Movimentação: velocidade 4.0; pulo 12.0; gravidade 0.6.
 - Ataque:
@@ -112,8 +113,8 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (25%).
   - Velocidade: 1.5
   - Padrão: anda (ping‑pong), mais lento e mais resistente.
 - Skeleton Warrior
-  - HP: 4
-  - Dano de contato: 1.0
+  - HP: 5
+  - Dano de contato: 1.5
   - Velocidade: 1.7
   - Padrão: patrulha a sexta plataforma nevada com escudo e maça, exigindo duelos corpo a corpo mais técnicos no topo.
 - Skeleton Archer
