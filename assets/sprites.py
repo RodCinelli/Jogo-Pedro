@@ -806,7 +806,7 @@ def make_skeleton_warrior_textures(base=(200, 200, 210, 255)):
     die = [crumble(walk[0], 0.9), crumble(walk[0], 0.65), crumble(walk[0], 0.4)]
 
     def tex(name: str, img):
-        return arcade.Texture(name=name, image=ImageOps.flip(img))
+        return arcade.Texture(name=name, image=img)
 
     def mirror(img):
         return ImageOps.mirror(img)
