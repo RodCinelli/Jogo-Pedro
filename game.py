@@ -20,7 +20,6 @@ from assets.sprites import (
     make_troll_textures,
     make_orc_textures,
     make_goblin_textures,
-    make_wolf_textures,
     make_skeleton_warrior_textures,
     make_cloud_texture,
     make_sword_fx_texture,
@@ -346,6 +345,8 @@ class GameWindow(arcade.Window):
             patrol_max = stair_step.center_x + patrol_pad
             fifth_platforms.append((stair_step.center_x, stair_step.top, patrol_min, patrol_max))
 
+        self.fifth_platforms = fifth_platforms
+
         # Sexta plataforma acima do baú (extensa e com aparência de neve)
         snow_platform = arcade.Sprite()
         snow_platform.texture = snow_platform_tex
@@ -353,10 +354,15 @@ class GameWindow(arcade.Window):
         snow_platform.center_y = stair_y + step_h
         self.wall_list.append(snow_platform)
 
-        # Inimigos da quinta plataforma (lobo + esqueleto por lado)
-        for cx, top, mn, mx in fifth_platforms:
-            self.spawn_wolf(x=cx - 36, y=top, min_x=mn, max_x=mx)
-            self.spawn_skeleton(x=cx + 36, y=top, min_x=mn, max_x=mx)
+        sixth_patrol_pad = snow_tex_w // 2 - 24
+        sixth_min = snow_platform.center_x - sixth_patrol_pad
+        sixth_max = snow_platform.center_x + sixth_patrol_pad
+        sixth_top = snow_platform.top
+        self.sixth_platform_bounds = (snow_platform.center_x, sixth_top, sixth_min, sixth_max)
+
+        # Inimigos da sexta plataforma (esqueletos defendendo o topo)
+        for offset in (-140, 140):
+            self.spawn_skeleton(x=snow_platform.center_x + offset, y=sixth_top, min_x=sixth_min, max_x=sixth_max)
 
         # Jogador
         self.player = arcade.Sprite()
@@ -562,35 +568,6 @@ class GameWindow(arcade.Window):
         enemy.death_timer = 0.0
         enemy.scored = False
         enemy.contact_damage = 1.5
-        enemy.show_hp_bar = False
-        self.enemy_list.append(enemy)
-
-    def spawn_wolf(self, x: float, y: float, min_x: float, max_x: float):
-        enemy = arcade.Sprite()
-        enemy_tex = make_wolf_textures()
-        enemy.enemy_tex = enemy_tex
-        enemy.texture = enemy_tex["walk_right"][0]
-        enemy.center_x = x
-        enemy.bottom = y
-        enemy.change_x = 2.0
-        enemy.bound_left = min_x
-        enemy.bound_right = max_x
-        enemy.anim_timer = 0.0
-        enemy.anim_index = 0
-        enemy.facing_right = True
-        enemy.type = "wolf"
-        enemy.display_name = "Wolf"
-        enemy.name_color = (200, 200, 210, 255)
-        enemy.name_font = 12
-        enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
-        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
-        enemy.max_hp = 2
-        enemy.hp = enemy.max_hp
-        enemy.hurt_timer = 0.0
-        enemy.dead = False
-        enemy.death_timer = 0.0
-        enemy.scored = False
-        enemy.contact_damage = 1.0
         enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
@@ -807,7 +784,7 @@ class GameWindow(arcade.Window):
                     e.remove_from_sprite_lists()
                     continue
                 # animação de morte
-                if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton"):
+                if e.type in ("slime", "goblin", "troll", "orc", "skeleton"):
                     e.facing_right = e.change_x >= 0
                     idx = min(int(e.death_timer / 0.15), 2)
                     key = "die_right" if e.facing_right else "die_left"
@@ -878,8 +855,8 @@ class GameWindow(arcade.Window):
                 e.hurt_timer -= delta_time
                 if e.anim_timer > 0.12:
                     e.anim_timer = 0
-                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton") else 4)
-                if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton"):
+                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "troll", "orc", "skeleton") else 4)
+                if e.type in ("slime", "goblin", "troll", "orc", "skeleton"):
                     key = "hurt_right" if e.facing_right else "hurt_left"
                 else:
                     key = "fly_right" if e.facing_right else "fly_left"
@@ -887,7 +864,7 @@ class GameWindow(arcade.Window):
                 if e.anim_timer > 0.18:
                     e.anim_timer = 0
                     e.anim_index = (e.anim_index + 1) % 4
-                if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton"):
+                if e.type in ("slime", "goblin", "troll", "orc", "skeleton"):
                     key = "walk_right" if e.facing_right else "walk_left"
                 else:  # bat
                     key = "fly_right" if e.facing_right else "fly_left"

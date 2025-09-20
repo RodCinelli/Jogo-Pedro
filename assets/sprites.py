@@ -680,126 +680,132 @@ def make_cloud_texture(width: int = 180, height: int = 90, alpha: int = 235) -> 
 
 
 
-def make_wolf_textures(base=(190, 190, 200, 255)):
-    """Lobo quadrúpede com animação de corrida simples."""
-    w, h = 48, 28
-    dark = (120, 120, 130, 255)
-    nose = (90, 90, 100, 255)
-    eye = (30, 30, 40, 255)
-
-    def frame(phase: int):
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        d = ImageDraw.Draw(img)
-        offset = [0, 2, 0, -2][phase % 4]
-        body_y = 12
-        # corpo
-        d.rectangle([6, body_y, 36, body_y + 10], fill=base, outline=dark)
-        # patas traseiras/diant. com leve animação
-        leg_shift = [2, 0, -2, 0][phase % 4]
-        d.rectangle([8, 4 + offset, 12, 12 + offset], fill=base, outline=dark)
-        d.rectangle([30, 4 - offset, 34, 12 - offset], fill=base, outline=dark)
-        d.rectangle([12, 0 + leg_shift, 16, 8 + leg_shift], fill=base, outline=dark)
-        d.rectangle([26, 0 - leg_shift, 30, 8 - leg_shift], fill=base, outline=dark)
-        # cabeça e focinho
-        d.rectangle([36, body_y + 2, 44, body_y + 8], fill=base, outline=dark)
-        d.polygon([(44, body_y + 3), (47, body_y + 4), (44, body_y + 7)], fill=base, outline=dark)
-        d.rectangle([40, body_y + 5, 41, body_y + 6], fill=eye)
-        d.rectangle([46, body_y + 6, 47, body_y + 7], fill=nose)
-        # cauda
-        d.polygon([(6, body_y + 7), (2, body_y + 10), (6, body_y + 9)], fill=base, outline=dark)
-        return img
-
-    walk = [frame(i) for i in range(4)]
-
-    def tint(img, a=70):
-        overlay = Image.new("RGBA", img.size, (255, 255, 255, a))
-        return Image.alpha_composite(img, overlay)
-
-    hurt = [tint(walk[1]), tint(walk[2])]
-
-    def fade(img, alpha):
-        faded = img.copy()
-        faded.putalpha(alpha)
-        return faded
-
-    die = [fade(walk[0], 200), fade(walk[0], 120), fade(walk[0], 40)]
-
-    def tex(name, img):
-        return arcade.Texture(name=name, image=ImageOps.flip(img))
-
-    def mirror(img):
-        return ImageOps.mirror(img)
-
-    return {
-        "walk_right": [tex("wolf_wr0", walk[0]), tex("wolf_wr1", walk[1]), tex("wolf_wr2", walk[2]), tex("wolf_wr3", walk[3])],
-        "walk_left": [tex("wolf_wl0", mirror(walk[0])), tex("wolf_wl1", mirror(walk[1])), tex("wolf_wl2", mirror(walk[2])), tex("wolf_wl3", mirror(walk[3]))],
-        "hurt_right": [tex("wolf_hr0", hurt[0]), tex("wolf_hr1", hurt[1])],
-        "hurt_left": [tex("wolf_hl0", mirror(hurt[0])), tex("wolf_hl1", mirror(hurt[1]))],
-        "die_right": [tex("wolf_dr0", die[0]), tex("wolf_dr1", die[1]), tex("wolf_dr2", die[2])],
-        "die_left": [tex("wolf_dl0", mirror(die[0])), tex("wolf_dl1", mirror(die[1])), tex("wolf_dl2", mirror(die[2]))],
-    }
-
-
-
 def make_skeleton_warrior_textures(base=(200, 200, 210, 255)):
-    """Esqueleto com maça em postura de marcha."""
-    w, h = 44, 56
-    dark = (140, 140, 160, 255)
+    """Esqueleto guerreiro com maça, mais detalhes e animação consistente."""
+
+    def adjust(color, delta, alpha=None):
+        r, g, b, a = color
+        r = max(0, min(255, r + delta))
+        g = max(0, min(255, g + delta))
+        b = max(0, min(255, b + delta))
+        return (r, g, b, a if alpha is None else alpha)
+
+    w, h = 52, 60
     bone = base
-    mace_head = (160, 160, 170, 255)
-    mace_spike = (200, 200, 210, 255)
+    shadow = adjust(base, -35)
+    dark = adjust(base, -70)
+    highlight = adjust(base, 45, 210)
+    cloth = (90, 92, 110, 255)
+    cloth_shadow = (70, 72, 90, 255)
+    handle = (150, 150, 160, 255)
+    mace_head = (135, 135, 145, 255)
+    mace_spike = (210, 210, 220, 255)
+    eye = (32, 36, 46, 255)
 
     def frame(phase: int):
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
         sway = [0, 2, 0, -2][phase % 4]
-        step = [2, 0, -2, 0][phase % 4]
-        # pernas
-        d.rectangle([16, 6, 20, 20 + step], fill=bone, outline=dark)
-        d.rectangle([24, 6, 28, 20 - step], fill=bone, outline=dark)
-        # cintura e costelas
-        d.rectangle([14, 20, 30, 32], outline=dark, fill=None)
-        for y in range(22, 31, 4):
-            d.line([15, y, 29, y], fill=bone, width=1)
-        # coluna
-        d.line([22, 6, 22, 20], fill=bone, width=2)
-        d.line([22, 32, 22, 46], fill=bone, width=2)
-        # braços (direito segurando maça)
-        d.line([30, 32, 36 + sway, 44], fill=bone, width=3)
-        d.line([14, 32, 8 + sway, 44], fill=bone, width=3)
-        # cabeça
-        d.ellipse([16, 46, 28, 54], outline=dark, fill=bone)
-        d.rectangle([18, 48, 19, 49], fill=(20, 20, 25, 255))
-        d.rectangle([25, 48, 26, 49], fill=(20, 20, 25, 255))
-        d.rectangle([20, 46, 24, 47], fill=(20, 20, 25, 255))
-        # maça
-        shaft_x = 36 + sway
-        d.rectangle([shaft_x - 1, 30, shaft_x + 1, 44], fill=bone)
-        d.ellipse([shaft_x - 5, 26, shaft_x + 5, 36], fill=mace_head, outline=dark)
-        d.point((shaft_x - 3, 32), fill=mace_spike)
-        d.point((shaft_x + 3, 32), fill=mace_spike)
-        d.point((shaft_x, 26), fill=mace_spike)
-        d.point((shaft_x, 36), fill=mace_spike)
+        stride = [2, -2, 2, -2][phase % 4]
+        bob = [0, 1, 0, 1][phase % 4]
+
+        foot_y = h - 5
+        shin_y = foot_y - 10
+        thigh_y = shin_y - 10
+        hip_y = thigh_y - 4 + bob
+        chest_top = hip_y - 14
+        chest_bottom = chest_top + 12
+        shoulder_y = chest_top + 3
+        neck_y = chest_top - 3
+        head_top = neck_y - 12
+        head_bottom = head_top + 12
+
+        left_leg_x = 18
+        right_leg_x = 30
+        leg_w = 4
+
+        left_shift = stride
+        right_shift = -stride
+
+        # Pernas (distância/detalhe)
+        for x, shift in ((right_leg_x, right_shift), (left_leg_x, left_shift)):
+            # parte inferior
+            lower_top = min(shin_y + shift, foot_y + shift)
+            lower_bottom = max(shin_y + shift, foot_y + shift)
+            d.rectangle([x, lower_top, x + leg_w, lower_bottom], fill=shadow, outline=dark)
+            # parte superior
+            upper_top = min(thigh_y + shift, shin_y + shift)
+            upper_bottom = max(thigh_y + shift, shin_y + shift)
+            d.rectangle([x, upper_top, x + leg_w, upper_bottom], fill=bone, outline=dark)
+            # pés
+            foot_top = foot_y + shift
+            d.rectangle([x - 1, foot_top, x + leg_w + 1, foot_top + 3], fill=dark)
+
+        # Saia/armadura leve
+        skirt_top = hip_y - 4
+        d.polygon([(16, hip_y), (36, hip_y), (38, hip_y + 8), (14, hip_y + 8)], fill=cloth, outline=dark)
+        d.polygon([(20, hip_y + 2), (24, hip_y + 10), (32, hip_y + 2)], fill=cloth_shadow, outline=None)
+
+        # Coluna
+        d.line([24, chest_bottom, 24, hip_y - 2], fill=shadow, width=2)
+
+        # Caixa torácica
+        d.rectangle([16, chest_top, 32, chest_bottom], outline=dark)
+        for ribs in range(4):
+            y = chest_top + 2 + ribs * 3
+            d.line([17, y, 31, y], fill=bone, width=1)
+
+        # Ombros e braços
+        left_hand_x = 40 + sway
+        right_hand_x = 14 + sway
+        left_hand_y = shoulder_y + 12
+        right_hand_y = shoulder_y + 10
+        d.line([32, shoulder_y, left_hand_x, left_hand_y], fill=bone, width=3)
+        d.line([18, shoulder_y, right_hand_x, right_hand_y], fill=bone, width=3)
+        d.ellipse([left_hand_x - 3, left_hand_y - 3, left_hand_x + 3, left_hand_y + 3], fill=bone, outline=dark)
+        d.ellipse([right_hand_x - 3, right_hand_y - 3, right_hand_x + 3, right_hand_y + 3], fill=bone, outline=dark)
+
+        # Maça
+        shaft_x = left_hand_x + 5
+        shaft_top = left_hand_y - 18
+        shaft_bottom = left_hand_y + 12
+        d.rectangle([shaft_x - 1, shaft_top, shaft_x + 1, shaft_bottom], fill=handle)
+        head_top = shaft_top - 8
+        head_bottom = shaft_top + 8
+        d.ellipse([shaft_x - 8, head_top, shaft_x + 8, head_bottom], fill=mace_head, outline=dark)
+        for dx, dy in ((0, -7), (0, 7), (-5, 0), (5, 0)):
+            d.point((shaft_x + dx, shaft_top + dy), fill=mace_spike)
+
+        # Cabeça
+        d.ellipse([18, head_top, 30, head_bottom], fill=bone, outline=dark)
+        d.rectangle([20, head_top + 4, 22, head_top + 6], fill=eye)
+        d.rectangle([26, head_top + 4, 28, head_top + 6], fill=eye)
+        d.rectangle([22, head_top + 7, 26, head_top + 8], fill=eye)
+        d.arc([19, head_top + 2, 29, head_top + 11], start=210, end=330, fill=highlight)
+
+        # Clavícula
+        d.line([18, chest_top + 1, 30, chest_top + 1], fill=highlight, width=1)
+
         return img
 
     walk = [frame(i) for i in range(4)]
 
-    def tint(img, a=80):
-        overlay = Image.new("RGBA", img.size, (255, 255, 255, a))
+    def tint(img, alpha: int):
+        overlay = Image.new("RGBA", img.size, (255, 255, 255, alpha))
         return Image.alpha_composite(img, overlay)
 
-    hurt = [tint(walk[1]), tint(walk[2])]
+    hurt = [tint(walk[1], 90), tint(walk[2], 90)]
 
-    def crumble(img, scale):
-        w, h = img.size
-        tmp = img.resize((int(w * scale), int(h * scale)), Image.NEAREST)
-        pad = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        pad.paste(tmp, ((w - tmp.width) // 2, (h - tmp.height) // 2))
+    def crumble(img, scale: float):
+        w0, h0 = img.size
+        tmp = img.resize((int(w0 * scale), int(h0 * scale)), Image.NEAREST)
+        pad = Image.new("RGBA", (w0, h0), (0, 0, 0, 0))
+        pad.paste(tmp, ((w0 - tmp.width) // 2, (h0 - tmp.height) // 2))
         return pad
 
-    die = [crumble(walk[0], 0.85), crumble(walk[0], 0.6), crumble(walk[0], 0.35)]
+    die = [crumble(walk[0], 0.9), crumble(walk[0], 0.65), crumble(walk[0], 0.4)]
 
-    def tex(name, img):
+    def tex(name: str, img):
         return arcade.Texture(name=name, image=ImageOps.flip(img))
 
     def mirror(img):
@@ -813,3 +819,4 @@ def make_skeleton_warrior_textures(base=(200, 200, 210, 255)):
         "die_right": [tex("sk_dr0", die[0]), tex("sk_dr1", die[1]), tex("sk_dr2", die[2])],
         "die_left": [tex("sk_dl0", mirror(die[0])), tex("sk_dl1", mirror(die[1])), tex("sk_dl2", mirror(die[2]))],
     }
+
