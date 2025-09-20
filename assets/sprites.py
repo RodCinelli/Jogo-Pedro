@@ -786,8 +786,8 @@ def make_skeleton_warrior_textures(base=(200, 200, 210, 255)):
         brow_y = head_top + 4
         d.polygon([(18, brow_y + 1), (21, brow_y - 1), (23, brow_y), (20, brow_y + 2)], fill=shadow)
         d.polygon([(25, brow_y), (28, brow_y - 1), (30, brow_y + 1), (27, brow_y + 2)], fill=shadow)
-        d.rectangle([20, brow_y + 3, 23, brow_y + 6], fill=eye)
-        d.rectangle([25, brow_y + 3, 28, brow_y + 6], fill=eye)
+        d.polygon([(20, brow_y + 2), (23, brow_y + 3), (23, brow_y + 6), (20, brow_y + 5)], fill=eye)
+        d.polygon([(25, brow_y + 2), (28, brow_y + 1), (28, brow_y + 5), (25, brow_y + 6)], fill=eye)
         d.rectangle([22, brow_y + 5, 26, brow_y + 6], fill=eye)
         d.line([18, brow_y - 1, 30, brow_y - 2], fill=highlight, width=1)
         d.arc([18, head_top + 1, 30, head_top + 12], start=215, end=325, fill=highlight)
@@ -909,13 +909,14 @@ def make_skeleton_archer_textures(base=(200, 200, 210, 255)):
         d.ellipse([bow_hand_x - 3, bow_hand_y - 3, bow_hand_x + 3, bow_hand_y + 3], fill=bone, outline=dark)
         d.ellipse([string_hand_x - 2, string_hand_y - 2, string_hand_x + 2, string_hand_y + 2], fill=bone, outline=dark)
 
-        bow_mid_x = bow_hand_x + 5
+        bow_mid_x = min(bow_hand_x + 4, w - 8)
         bow_top = bow_hand_y + 12
         bow_bottom = bow_hand_y - 12
+        bow_tip_x = min(bow_mid_x + 5, w - 2)
         d.line([(bow_mid_x, bow_bottom), (bow_mid_x + 4, bow_hand_y), (bow_mid_x, bow_top)], fill=bow_wood, width=3)
         d.line([(bow_mid_x, bow_bottom), (bow_hand_x, bow_hand_y), (bow_mid_x, bow_top)], fill=bow_string, width=2)
         d.line([(bow_hand_x - 8, bow_hand_y), (bow_hand_x, bow_hand_y)], fill=arrow_shaft, width=2)
-        d.polygon([(bow_mid_x + 1, bow_hand_y), (bow_mid_x + 7, bow_hand_y + 2), (bow_mid_x + 7, bow_hand_y - 2)], fill=arrow_head, outline=dark)
+        d.polygon([(bow_tip_x - 4, bow_hand_y - 2), (bow_tip_x, bow_hand_y), (bow_tip_x - 4, bow_hand_y + 2)], fill=arrow_head, outline=dark)
         d.polygon([(bow_hand_x - 10, bow_hand_y), (bow_hand_x - 14, bow_hand_y + 3), (bow_hand_x - 14, bow_hand_y - 3)], fill=arrow_head, outline=dark)
 
         d.ellipse([16, head_top - 1, 32, head_bottom + 1], fill=bone, outline=dark)
@@ -965,13 +966,13 @@ def make_skeleton_archer_textures(base=(200, 200, 210, 255)):
     }
 
 
-def make_arrow_textures(width: int = 28, height: int = 6, color=(210, 210, 220, 255)):
+def make_arrow_textures(width: int = 28, height: int = 6, body=(150, 110, 70, 255), tip=(190, 150, 110, 255), fletching=(120, 90, 60, 255)):
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     mid_y = height // 2
-    d.rectangle([2, mid_y - 1, width - 6, mid_y + 1], fill=color)
-    d.polygon([(width - 6, mid_y - 2), (width - 1, mid_y), (width - 6, mid_y + 2)], fill=color, outline=(160, 160, 170, 255))
-    d.polygon([(0, mid_y), (4, mid_y + 3), (4, mid_y - 3)], fill=(180, 180, 200, 255), outline=(120, 120, 150, 255))
+    d.rectangle([2, mid_y - 1, width - 6, mid_y + 1], fill=body)
+    d.polygon([(width - 6, mid_y - 2), (width - 1, mid_y), (width - 6, mid_y + 2)], fill=tip, outline=(90, 70, 50, 255))
+    d.polygon([(0, mid_y), (4, mid_y + 3), (4, mid_y - 3)], fill=fletching, outline=(70, 50, 35, 255))
     right = arcade.Texture(name=f"arrow_{width}x{height}_r", image=img)
     left = arcade.Texture(name=f"arrow_{width}x{height}_l", image=ImageOps.mirror(img))
     return {"right": right, "left": left}

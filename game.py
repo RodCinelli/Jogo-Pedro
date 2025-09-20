@@ -356,7 +356,7 @@ class GameWindow(arcade.Window):
         self.fifth_platforms = fifth_platforms
 
         if fifth_platforms:
-            edge_offset = snow_step_w // 2 - 40
+            edge_offset = snow_step_w // 2 - 220
             for idx, (cx, top, mn, mx) in enumerate(fifth_platforms):
                 facing_right = (idx == 0)
                 spawn_x = cx + (edge_offset if facing_right else -edge_offset)
@@ -656,7 +656,7 @@ class GameWindow(arcade.Window):
         tex_key = "right" if direction >= 0 else "left"
         arrow.texture = textures[tex_key]
         arrow.center_x = shooter.center_x + direction * 22
-        arrow.center_y = shooter.center_y + 28
+        arrow.center_y = shooter.center_y + 8
         arrow.change_x = direction * getattr(shooter, 'projectile_speed', 7.0)
         arrow.damage = getattr(shooter, 'arrow_damage', 1.0)
         arrow.distance = 0.0
