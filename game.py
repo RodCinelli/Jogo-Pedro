@@ -20,6 +20,8 @@ from assets.sprites import (
     make_troll_textures,
     make_orc_textures,
     make_goblin_textures,
+    make_wolf_textures,
+    make_skeleton_warrior_textures,
     make_cloud_texture,
     make_sword_fx_texture,
     make_sun_texture,
@@ -256,6 +258,12 @@ class GameWindow(arcade.Window):
         green_platform_tex = _tinted_platform(stair_tex, "ivy", (70, 130, 90), 0.35)
         dry_platform_tex = _tinted_platform(stair_tex, "dry", (184, 134, 72), 0.32)
         blood_platform_tex = _tinted_platform(stair_tex, "blood", (170, 50, 50), 0.30)
+        snow_tex_w = 440
+        snow_base_tex = make_platform_texture(snow_tex_w, 20)
+        snow_platform_tex = _tinted_platform(snow_base_tex, "snow", (235, 240, 255), 0.55)
+        snow_step_w = 230
+        snow_step_base = make_platform_texture(snow_step_w, 18)
+        snow_step_tex = _tinted_platform(snow_step_base, "snow_step", (235, 240, 255), 0.55)
 
         plat.texture = _tinted_platform(plat_tex, "ivy_main", (70, 130, 90), 0.35)
         self.wall_list.append(plat)
@@ -322,6 +330,33 @@ class GameWindow(arcade.Window):
         self.spawn_chest(center_top.center_x, center_top.center_y + 18)
         # Centro para órbita dos morcegos
         self.chest_orbit_center = (center_top.center_x, center_top.center_y + 18)
+
+        # Quintas plataformas (escada nevada)
+        stair_offset = 210
+        stair_y = center_top.center_y + int(step_h * 0.8)
+        fifth_platforms = []
+        patrol_pad = snow_step_w // 2 - 14
+        for dx in (-stair_offset, stair_offset):
+            stair_step = arcade.Sprite()
+            stair_step.texture = snow_step_tex
+            stair_step.center_x = center_top.center_x + dx
+            stair_step.center_y = stair_y
+            self.wall_list.append(stair_step)
+            patrol_min = stair_step.center_x - patrol_pad
+            patrol_max = stair_step.center_x + patrol_pad
+            fifth_platforms.append((stair_step.center_x, stair_step.top, patrol_min, patrol_max))
+
+        # Sexta plataforma acima do baú (extensa e com aparência de neve)
+        snow_platform = arcade.Sprite()
+        snow_platform.texture = snow_platform_tex
+        snow_platform.center_x = center_top.center_x
+        snow_platform.center_y = stair_y + step_h
+        self.wall_list.append(snow_platform)
+
+        # Inimigos da quinta plataforma (lobo + esqueleto por lado)
+        for cx, top, mn, mx in fifth_platforms:
+            self.spawn_wolf(x=cx - 36, y=top, min_x=mn, max_x=mx)
+            self.spawn_skeleton(x=cx + 36, y=top, min_x=mn, max_x=mx)
 
         # Jogador
         self.player = arcade.Sprite()
@@ -530,6 +565,64 @@ class GameWindow(arcade.Window):
         enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
+    def spawn_wolf(self, x: float, y: float, min_x: float, max_x: float):
+        enemy = arcade.Sprite()
+        enemy_tex = make_wolf_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["walk_right"][0]
+        enemy.center_x = x
+        enemy.bottom = y
+        enemy.change_x = 2.0
+        enemy.bound_left = min_x
+        enemy.bound_right = max_x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = True
+        enemy.type = "wolf"
+        enemy.display_name = "Wolf"
+        enemy.name_color = (200, 200, 210, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 20, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 19, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
+        enemy.max_hp = 2
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        enemy.contact_damage = 1.0
+        enemy.show_hp_bar = False
+        self.enemy_list.append(enemy)
+
+    def spawn_skeleton(self, x: float, y: float, min_x: float, max_x: float):
+        enemy = arcade.Sprite()
+        enemy_tex = make_skeleton_warrior_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["walk_right"][0]
+        enemy.center_x = x
+        enemy.bottom = y
+        enemy.change_x = 1.7
+        enemy.bound_left = min_x
+        enemy.bound_right = max_x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = True
+        enemy.type = "skeleton"
+        enemy.display_name = "Skeleton Warrior"
+        enemy.name_color = (190, 190, 200, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 26, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 25, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
+        enemy.max_hp = 4
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        enemy.contact_damage = 1.0
+        enemy.show_hp_bar = False
+        self.enemy_list.append(enemy)
+
     def on_draw(self):
         self.clear()
         # Tela de título (usa Text para performance)
@@ -709,12 +802,12 @@ class GameWindow(arcade.Window):
                         self.score += 100
                         e.scored = True
                         # Drop de coração 30%
-                        if random.random() < 0.3:
+                        if random.random() < 0.25:
                             self.spawn_heart(e.center_x, e.center_y + 18)
                     e.remove_from_sprite_lists()
                     continue
                 # animação de morte
-                if e.type in ("slime", "goblin", "troll", "orc"):
+                if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton"):
                     e.facing_right = e.change_x >= 0
                     idx = min(int(e.death_timer / 0.15), 2)
                     key = "die_right" if e.facing_right else "die_left"
@@ -785,8 +878,8 @@ class GameWindow(arcade.Window):
                 e.hurt_timer -= delta_time
                 if e.anim_timer > 0.12:
                     e.anim_timer = 0
-                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "troll", "orc") else 4)
-                if e.type in ("slime", "goblin", "troll", "orc"):
+                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton") else 4)
+                if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton"):
                     key = "hurt_right" if e.facing_right else "hurt_left"
                 else:
                     key = "fly_right" if e.facing_right else "fly_left"
@@ -794,7 +887,7 @@ class GameWindow(arcade.Window):
                 if e.anim_timer > 0.18:
                     e.anim_timer = 0
                     e.anim_index = (e.anim_index + 1) % 4
-                if e.type in ("slime", "goblin", "troll", "orc"):
+                if e.type in ("slime", "goblin", "troll", "orc", "wolf", "skeleton"):
                     key = "walk_right" if e.facing_right else "walk_left"
                 else:  # bat
                     key = "fly_right" if e.facing_right else "fly_left"
@@ -1401,13 +1494,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
 
 
