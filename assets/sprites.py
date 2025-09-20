@@ -782,11 +782,15 @@ def make_skeleton_warrior_textures(base=(200, 200, 210, 255)):
         for dx, dy in ((0, -5), (0, 5), (-4, 0), (4, 0)):
             d.point((shaft_x + dx, shaft_top + dy), fill=mace_spike)
 
-        d.ellipse([18, head_top, 30, head_bottom], fill=bone, outline=dark)
-        d.rectangle([20, head_top + 4, 22, head_top + 6], fill=eye)
-        d.rectangle([26, head_top + 4, 28, head_top + 6], fill=eye)
-        d.rectangle([22, head_top + 7, 26, head_top + 8], fill=eye)
-        d.arc([19, head_top + 2, 29, head_top + 11], start=210, end=330, fill=highlight)
+        d.ellipse([16, head_top - 1, 32, head_bottom + 1], fill=bone, outline=dark)
+        brow_y = head_top + 4
+        d.polygon([(18, brow_y + 1), (21, brow_y - 1), (23, brow_y), (20, brow_y + 2)], fill=shadow)
+        d.polygon([(25, brow_y), (28, brow_y - 1), (30, brow_y + 1), (27, brow_y + 2)], fill=shadow)
+        d.polygon([(20, brow_y + 2), (23, brow_y + 3), (23, brow_y + 6), (20, brow_y + 5)], fill=eye)
+        d.polygon([(25, brow_y + 2), (28, brow_y + 1), (28, brow_y + 5), (25, brow_y + 6)], fill=eye)
+        d.rectangle([22, brow_y + 5, 26, brow_y + 6], fill=eye)
+        d.line([18, brow_y - 1, 30, brow_y - 2], fill=highlight, width=1)
+        d.arc([18, head_top + 1, 30, head_top + 12], start=215, end=325, fill=highlight)
 
         d.line([18, chest_top + 1, 30, chest_top + 1], fill=highlight, width=1)
 
