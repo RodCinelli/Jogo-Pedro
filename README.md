@@ -26,8 +26,8 @@ Bem-vindo ao Warrior Platform, um platformer 2D com combate simples, IA variada 
 
 ## Visão Geral
 - Objetivo: derrotar todos os inimigos antes que o tempo acabe, preservando sua vida. Colete corações e pegue a Super Espada para dobrar seu dano.
-- Mundo: terreno com plataformas centrais e escadarias, spawns de inimigos no chão e andares, e um baú no topo com upgrade de espada.
-- Plataformas tematizadas: o andar dos goblins recebe um matiz esverdeado (heras), o dos trolls fica alaranjado (vegeta��o �rida) e o dos orcs ganha manchas vermelhas lembrando sangue, enquanto a base do ba� permanece com o tom marrom original.
+- Mundo: terreno com plataformas centrais e escadarias, spawns de inimigos no chão e andares, e um baú no topo com upgrade de espada. O trecho final agora possui duas plataformas nevadas: uma dupla estreita (quinta plataforma) pensada como degrau de acesso e uma arena larga (sexta plataforma) onde enfrentamos os Skeleton Warriors.
+- Plataformas tematizadas: o andar dos goblins recebe um matiz esverdeado (heras), o dos trolls fica alaranjado (vegetação árida) e o dos orcs ganha manchas vermelhas lembrando sangue; acima deles a escadaria nevada conduz ao topo.
 - Estilo: pixels gerados por código (sprites), clima dinâmico e efeitos simples que deixam a tela viva e legível.
 
 
@@ -78,18 +78,18 @@ Referências no código:
 
 
 ## Itens e Power‑ups
-- Coração (cura 1.0): chance de queda 30% ao abater inimigos.
+- Coração (cura 1.0): chance de queda 25% ao abater inimigos.
 - Baú da Super Espada: no topo das plataformas. Ao coletar:
   - Dano do ataque dobra (de 1 para 2).
   - Efeito visual “sword glow” e banner informativo.
 
 Referências no código:
-- Queda de coração: `game.py:665–671` (drop 30%)
+- Queda de coração: `game.py:775–783` (drop 25%)
 - Baú e efeito: `game.py:294–306` (posicionamento) e `game.py:830–857` (efeitos e banner)
 
 
 ## Inimigos (HP, dano, padrões)
-Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (30%).
+Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (25%).
 
 - Slime
   - HP: 3
@@ -111,6 +111,11 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (30%).
   - Dano de contato: 1.5
   - Velocidade: 1.5
   - Padrão: anda (ping‑pong), mais lento e mais resistente.
+- Skeleton Warrior
+  - HP: 4
+  - Dano de contato: 1.0
+  - Velocidade: 1.7
+  - Padrão: patrulha a sexta plataforma nevada com escudo e maça, exigindo duelos corpo a corpo mais técnicos no topo.
 - Bat
   - HP: 2
   - Dano de contato: 1.0
@@ -124,8 +129,8 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (30%).
     - Cooldown inicial ao spawn para evitar rasante imediato.
 
 Referências no código:
-- Spawns e atributos: `game.py:320–420`
-- IA e animação: `game.py:657–740` (inclui rasante, colisões e recargas)
+- Spawns e atributos: `game.py:320–620`
+- IA e animação: `game.py:657–804` (inclui rasante, colisões e recargas)
 
 ## UI dos Inimigos (Nome e Barra de Vida)
 - Nome sempre visível sobre cada inimigo, com cor temática do tipo:
@@ -133,12 +138,14 @@ Referências no código:
   - Goblin: verde (60, 170, 90)
   - Troll: laranja (230, 140, 70)
   - Orc: vermelho (200, 70, 70)
+  - Skeleton Warrior: prata (190, 190, 200)
   - Bat: roxo (150, 100, 200)
 - Barra de vida: só aparece após o inimigo sofrer dano pela primeira vez; antes disso, apenas o nome é mostrado.
 - Performance: rótulos de texto são pré-criados no momento do spawn e apenas reposicionados a cada frame.
 
 Referências no código:
 - Criação dos rótulos: `game.py` (funções `spawn_*` dos inimigos)
+- Layout das plataformas superiores (quinta escada nevada e arena sexta): `game.py:334–368`
 - Desenho/condição da barra: `game.py` (bloco de desenho dos inimigos em `on_draw`)
 
 
@@ -153,7 +160,7 @@ Referências no código:
 
 
 ## Clima e Efeitos Visuais
-- Plataformas com tonaliza��o tem�tica: verde para o n�vel dos goblins, laranja �rido para os trolls e vermelho marcante para os orcs, mantendo o patamar do ba� com a madeira cl�ssica.
+- Plataformas com tonalização temática: verde para o nível dos goblins, laranja árido para os trolls e vermelho marcante para os orcs, mantendo o patamar do baú com a madeira clássica.
 - Climas possíveis: dia ensolarado, dia nublado, dia chuvoso, noite limpa, noite nublada, noite chuvosa.
 - Nuvens: densidade/alpha variam por clima.
 - Chuva: gotas com vento e relâmpagos ocasionais com “flash” na tela.
