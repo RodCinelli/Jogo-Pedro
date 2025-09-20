@@ -26,7 +26,7 @@ Bem-vindo ao Warrior Platform, um platformer 2D com combate simples, IA variada 
 
 ## Visão Geral
 - Objetivo: derrotar todos os inimigos antes que o tempo acabe, preservando sua vida. Colete corações e pegue a Super Espada para dobrar seu dano.
-- Mundo: terreno com plataformas centrais e escadarias, spawns de inimigos no chão e andares, e um baú no topo com upgrade de espada. O trecho final agora possui duas plataformas nevadas: uma dupla estreita (quinta plataforma) pensada como degrau de acesso e uma arena larga (sexta plataforma) onde enfrentamos os Skeleton Warriors.
+- Mundo: terreno com plataformas centrais e escadarias, spawns de inimigos no chão e andares, e um baú no topo com upgrade de espada. O trecho final agora possui duas plataformas nevadas: uma dupla estreita (quinta plataforma) guardada por Skeleton Archers fixos com visão de flechas e uma arena larga (sexta plataforma) onde enfrentamos os Skeleton Warriors.
 - Plataformas tematizadas: o andar dos goblins recebe um matiz esverdeado (heras), o dos trolls fica alaranjado (vegetação árida) e o dos orcs ganha manchas vermelhas lembrando sangue; acima deles a escadaria nevada conduz ao topo.
 - Estilo: pixels gerados por código (sprites), clima dinâmico e efeitos simples que deixam a tela viva e legível.
 
@@ -116,6 +116,11 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (25%).
   - Dano de contato: 1.0
   - Velocidade: 1.7
   - Padrão: patrulha a sexta plataforma nevada com escudo e maça, exigindo duelos corpo a corpo mais técnicos no topo.
+- Skeleton Archer
+  - HP: 3
+  - Dano de contato: 1.0
+  - Velocidade: 0.0 (mantém posição)
+  - Padrão: permanece estático nas extremidades da quinta plataforma nevada e dispara flechas a cada 3s quando o jogador entra em sua linha de visão horizontal.
 - Bat
   - HP: 2
   - Dano de contato: 1.0
@@ -129,8 +134,8 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (25%).
     - Cooldown inicial ao spawn para evitar rasante imediato.
 
 Referências no código:
-- Spawns e atributos: `game.py:320–620`
-- IA e animação: `game.py:657–804` (inclui rasante, colisões e recargas)
+- Spawns e atributos: game.py:320–640
+- IA e animação: game.py:657–912 (inclui rasante, flechas, colisões e recargas)
 
 ## UI dos Inimigos (Nome e Barra de Vida)
 - Nome sempre visível sobre cada inimigo, com cor temática do tipo:
@@ -138,7 +143,7 @@ Referências no código:
   - Goblin: verde (60, 170, 90)
   - Troll: laranja (230, 140, 70)
   - Orc: vermelho (200, 70, 70)
-  - Skeleton Warrior: prata (190, 190, 200)
+  - Skeletons (Warrior/Archer): prata (190, 190, 200)
   - Bat: roxo (150, 100, 200)
 - Barra de vida: só aparece após o inimigo sofrer dano pela primeira vez; antes disso, apenas o nome é mostrado.
 - Performance: rótulos de texto são pré-criados no momento do spawn e apenas reposicionados a cada frame.

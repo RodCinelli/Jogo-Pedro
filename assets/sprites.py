@@ -786,8 +786,8 @@ def make_skeleton_warrior_textures(base=(200, 200, 210, 255)):
         brow_y = head_top + 4
         d.polygon([(18, brow_y + 1), (21, brow_y - 1), (23, brow_y), (20, brow_y + 2)], fill=shadow)
         d.polygon([(25, brow_y), (28, brow_y - 1), (30, brow_y + 1), (27, brow_y + 2)], fill=shadow)
-        d.polygon([(20, brow_y + 2), (23, brow_y + 3), (23, brow_y + 6), (20, brow_y + 5)], fill=eye)
-        d.polygon([(25, brow_y + 2), (28, brow_y + 1), (28, brow_y + 5), (25, brow_y + 6)], fill=eye)
+        d.rectangle([20, brow_y + 3, 23, brow_y + 6], fill=eye)
+        d.rectangle([25, brow_y + 3, 28, brow_y + 6], fill=eye)
         d.rectangle([22, brow_y + 5, 26, brow_y + 6], fill=eye)
         d.line([18, brow_y - 1, 30, brow_y - 2], fill=highlight, width=1)
         d.arc([18, head_top + 1, 30, head_top + 12], start=215, end=325, fill=highlight)
@@ -827,3 +827,152 @@ def make_skeleton_warrior_textures(base=(200, 200, 210, 255)):
         "die_right": [tex("sk_dr0", die[0]), tex("sk_dr1", die[1]), tex("sk_dr2", die[2])],
         "die_left": [tex("sk_dl0", mirror(die[0])), tex("sk_dl1", mirror(die[1])), tex("sk_dl2", mirror(die[2]))],
     }
+
+
+
+def make_skeleton_archer_textures(base=(200, 200, 210, 255)):
+    """Esqueleto arqueiro com arco de longo alcance."""
+
+    def adjust(color, delta, alpha=None):
+        r, g, b, a = color
+        r = max(0, min(255, r + delta))
+        g = max(0, min(255, g + delta))
+        b = max(0, min(255, b + delta))
+        return (r, g, b, a if alpha is None else alpha)
+
+    w, h = 52, 60
+    bone = base
+    shadow = adjust(base, -35)
+    dark = adjust(base, -70)
+    highlight = adjust(base, 45, 210)
+    pelvis = adjust(base, -10, 220)
+    bow_wood = (170, 130, 80, 255)
+    bow_shadow = (120, 90, 60, 255)
+    bow_string = (230, 230, 230, 220)
+    arrow_shaft = (150, 110, 70, 255)
+    arrow_head = (200, 200, 210, 255)
+    eye = (32, 36, 46, 255)
+
+    def frame(phase: int):
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        sway = [0, 1, 0, -1][phase % 4]
+        stride = [1, -1, 1, -1][phase % 4]
+        bob = [0, 1, 0, 1][phase % 4]
+
+        foot_y = h - 4
+        shin_y = foot_y - 11
+        thigh_y = shin_y - 10
+        hip_y = thigh_y - 4 + bob
+        chest_top = hip_y - 16
+        chest_bottom = chest_top + 14
+        shoulder_y = chest_top + 4
+        neck_y = chest_top - 2
+        head_top = neck_y - 12
+        head_bottom = head_top + 12
+
+        left_leg_x = 18
+        right_leg_x = 30
+        leg_w = 4
+
+        for x, shift in ((right_leg_x, -stride), (left_leg_x, stride)):
+            lower_top = shin_y + shift
+            lower_bottom = foot_y + shift
+            if lower_top > lower_bottom:
+                lower_top, lower_bottom = lower_bottom, lower_top
+            d.rectangle([x, lower_top, x + leg_w, lower_bottom], fill=shadow, outline=dark)
+
+            upper_top = thigh_y + shift
+            upper_bottom = shin_y + shift
+            if upper_top > upper_bottom:
+                upper_top, upper_bottom = upper_bottom, upper_top
+            d.rectangle([x, upper_top, x + leg_w, upper_bottom], fill=bone, outline=dark)
+
+            foot_top = foot_y + shift
+            d.rectangle([x - 1, min(foot_top, foot_top + 2), x + leg_w + 1, max(foot_top, foot_top + 2)], fill=dark)
+
+        d.rectangle([18, hip_y - 2, 34, hip_y + 1], fill=pelvis, outline=dark)
+        d.line([24, hip_y - 2, 24, chest_bottom], fill=shadow, width=2)
+
+        d.rectangle([16, chest_top, 32, chest_bottom], outline=dark)
+        for ribs in range(4):
+            y = chest_top + 2 + ribs * 3
+            d.line([17, y, 31, y], fill=bone, width=1)
+
+        bow_hand_x = 40 + sway
+        bow_hand_y = shoulder_y + 10
+        string_hand_x = 18 + sway
+        string_hand_y = shoulder_y + 11
+
+        d.line([32, shoulder_y, bow_hand_x, bow_hand_y], fill=bone, width=3)
+        d.line([20, shoulder_y, string_hand_x, string_hand_y], fill=bone, width=3)
+        d.ellipse([bow_hand_x - 3, bow_hand_y - 3, bow_hand_x + 3, bow_hand_y + 3], fill=bone, outline=dark)
+        d.ellipse([string_hand_x - 2, string_hand_y - 2, string_hand_x + 2, string_hand_y + 2], fill=bone, outline=dark)
+
+        bow_mid_x = bow_hand_x + 5
+        bow_top = bow_hand_y + 12
+        bow_bottom = bow_hand_y - 12
+        d.line([(bow_mid_x, bow_bottom), (bow_mid_x + 4, bow_hand_y), (bow_mid_x, bow_top)], fill=bow_wood, width=3)
+        d.line([(bow_mid_x, bow_bottom), (bow_hand_x, bow_hand_y), (bow_mid_x, bow_top)], fill=bow_string, width=2)
+        d.line([(bow_hand_x - 8, bow_hand_y), (bow_hand_x, bow_hand_y)], fill=arrow_shaft, width=2)
+        d.polygon([(bow_mid_x + 1, bow_hand_y), (bow_mid_x + 7, bow_hand_y + 2), (bow_mid_x + 7, bow_hand_y - 2)], fill=arrow_head, outline=dark)
+        d.polygon([(bow_hand_x - 10, bow_hand_y), (bow_hand_x - 14, bow_hand_y + 3), (bow_hand_x - 14, bow_hand_y - 3)], fill=arrow_head, outline=dark)
+
+        d.ellipse([16, head_top - 1, 32, head_bottom + 1], fill=bone, outline=dark)
+        brow_y = head_top + 4
+        d.polygon([(18, brow_y + 1), (21, brow_y - 1), (23, brow_y), (20, brow_y + 2)], fill=shadow)
+        d.polygon([(25, brow_y), (28, brow_y - 1), (30, brow_y + 1), (27, brow_y + 2)], fill=shadow)
+        d.polygon([(20, brow_y + 2), (23, brow_y + 3), (23, brow_y + 6), (20, brow_y + 5)], fill=eye)
+        d.polygon([(25, brow_y + 2), (28, brow_y + 1), (28, brow_y + 5), (25, brow_y + 6)], fill=eye)
+        d.rectangle([22, brow_y + 5, 26, brow_y + 6], fill=eye)
+        d.line([18, brow_y - 1, 30, brow_y - 2], fill=highlight, width=1)
+        d.arc([18, head_top + 1, 30, head_top + 12], start=215, end=325, fill=highlight)
+
+        d.line([18, chest_top + 1, 30, chest_top + 1], fill=highlight, width=1)
+
+        return img
+
+    walk = [frame(i) for i in range(4)]
+
+    def tint(img, alpha: int):
+        overlay = Image.new("RGBA", img.size, (255, 255, 255, alpha))
+        return Image.alpha_composite(img, overlay)
+
+    hurt = [tint(walk[1], 90), tint(walk[2], 90)]
+
+    def crumble(img, scale: float):
+        w0, h0 = img.size
+        tmp = img.resize((int(w0 * scale), int(h0 * scale)), Image.NEAREST)
+        pad = Image.new("RGBA", (w0, h0), (0, 0, 0, 0))
+        pad.paste(tmp, ((w0 - tmp.width) // 2, (h0 - tmp.height) // 2))
+        return pad
+
+    die = [crumble(walk[0], 0.9), crumble(walk[0], 0.65), crumble(walk[0], 0.4)]
+
+    def tex(name: str, img):
+        return arcade.Texture(name=name, image=img)
+
+    def mirror(img):
+        return ImageOps.mirror(img)
+
+    return {
+        "walk_right": [tex("skar_wr0", walk[0]), tex("skar_wr1", walk[1]), tex("skar_wr2", walk[2]), tex("skar_wr3", walk[3])],
+        "walk_left": [tex("skar_wl0", mirror(walk[0])), tex("skar_wl1", mirror(walk[1])), tex("skar_wl2", mirror(walk[2])), tex("skar_wl3", mirror(walk[3]))],
+        "hurt_right": [tex("skar_hr0", hurt[0]), tex("skar_hr1", hurt[1])],
+        "hurt_left": [tex("skar_hl0", mirror(hurt[0])), tex("skar_hl1", mirror(hurt[1]))],
+        "die_right": [tex("skar_dr0", die[0]), tex("skar_dr1", die[1]), tex("skar_dr2", die[2])],
+        "die_left": [tex("skar_dl0", mirror(die[0])), tex("skar_dl1", mirror(die[1])), tex("skar_dl2", mirror(die[2]))],
+    }
+
+
+def make_arrow_textures(width: int = 28, height: int = 6, color=(210, 210, 220, 255)):
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    mid_y = height // 2
+    d.rectangle([2, mid_y - 1, width - 6, mid_y + 1], fill=color)
+    d.polygon([(width - 6, mid_y - 2), (width - 1, mid_y), (width - 6, mid_y + 2)], fill=color, outline=(160, 160, 170, 255))
+    d.polygon([(0, mid_y), (4, mid_y + 3), (4, mid_y - 3)], fill=(180, 180, 200, 255), outline=(120, 120, 150, 255))
+    right = arcade.Texture(name=f"arrow_{width}x{height}_r", image=img)
+    left = arcade.Texture(name=f"arrow_{width}x{height}_l", image=ImageOps.mirror(img))
+    return {"right": right, "left": left}
+

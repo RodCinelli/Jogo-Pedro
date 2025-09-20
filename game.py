@@ -21,6 +21,8 @@ from assets.sprites import (
     make_orc_textures,
     make_goblin_textures,
     make_skeleton_warrior_textures,
+    make_skeleton_archer_textures,
+    make_arrow_textures,
     make_cloud_texture,
     make_sword_fx_texture,
     make_sun_texture,
@@ -70,6 +72,9 @@ class GameWindow(arcade.Window):
         self.rain_list = arcade.SpriteList()
         self.bolt_list = arcade.SpriteList()
         self.fx_list = arcade.SpriteList()
+        self.projectile_list = arcade.SpriteList()
+        self.skeleton_archer_textures = make_skeleton_archer_textures()
+        self.arrow_textures = make_arrow_textures(28, 6)
 
         self.player = arcade.Sprite()
         self.physics_engine = None
@@ -117,6 +122,9 @@ class GameWindow(arcade.Window):
         self.sky_list = arcade.SpriteList()
         self.rain_list = arcade.SpriteList()
         self.bolt_list = arcade.SpriteList()
+        self.projectile_list = arcade.SpriteList()
+        self.skeleton_archer_textures = make_skeleton_archer_textures()
+        self.arrow_textures = make_arrow_textures(28, 6)
         self.score = 0
         self.score_text = arcade.Text("Score: 0", 10, self.height - 30, arcade.color.WHITE, 16)
         # Timer de 5 minutos
@@ -346,6 +354,13 @@ class GameWindow(arcade.Window):
             fifth_platforms.append((stair_step.center_x, stair_step.top, patrol_min, patrol_max))
 
         self.fifth_platforms = fifth_platforms
+
+        if fifth_platforms:
+            edge_offset = snow_step_w // 2 - 40
+            for idx, (cx, top, mn, mx) in enumerate(fifth_platforms):
+                facing_right = (idx == 0)
+                spawn_x = cx + (edge_offset if facing_right else -edge_offset)
+                self.spawn_skeleton_archer(x=spawn_x, y=top, min_x=mn, max_x=mx, facing_right=facing_right)
 
         # Sexta plataforma acima do baú (extensa e com aparência de neve)
         snow_platform = arcade.Sprite()
@@ -600,6 +615,78 @@ class GameWindow(arcade.Window):
         enemy.show_hp_bar = False
         self.enemy_list.append(enemy)
 
+    def spawn_skeleton_archer(self, x: float, y: float, min_x: float, max_x: float, facing_right: bool):
+        enemy = arcade.Sprite()
+        enemy_tex = self.skeleton_archer_textures or make_skeleton_archer_textures()
+        enemy.enemy_tex = enemy_tex
+        enemy.texture = enemy_tex["walk_right"][0] if facing_right else enemy_tex["walk_left"][0]
+        enemy.center_x = x
+        enemy.bottom = y
+        enemy.change_x = 0.0
+        enemy.bound_left = x
+        enemy.bound_right = x
+        enemy.stand_x = x
+        enemy.anim_timer = 0.0
+        enemy.anim_index = 0
+        enemy.facing_right = facing_right
+        enemy.type = "skeleton_archer"
+        enemy.display_name = "Skeleton Archer"
+        enemy.name_color = (190, 190, 200, 255)
+        enemy.name_font = 12
+        enemy.name_text = arcade.Text(enemy.display_name, x, y + 26, enemy.name_color, enemy.name_font, anchor_x="center")
+        enemy.name_shadow = arcade.Text(enemy.display_name, x + 1, y + 25, (0, 0, 0, 200), enemy.name_font, anchor_x="center")
+        enemy.max_hp = 3
+        enemy.hp = enemy.max_hp
+        enemy.hurt_timer = 0.0
+        enemy.dead = False
+        enemy.death_timer = 0.0
+        enemy.scored = False
+        enemy.contact_damage = 1.0
+        enemy.show_hp_bar = False
+        enemy.shoot_cooldown = 0.0
+        enemy.shoot_interval = 3.0
+        enemy.projectile_speed = 7.0
+        enemy.arrow_damage = 1.0
+        enemy.arrow_textures = self.arrow_textures
+        self.enemy_list.append(enemy)
+
+    def spawn_archer_arrow(self, shooter: arcade.Sprite, direction: int):
+        arrow = arcade.Sprite()
+        textures = self.arrow_textures or make_arrow_textures(28, 6)
+        tex_key = "right" if direction >= 0 else "left"
+        arrow.texture = textures[tex_key]
+        arrow.center_x = shooter.center_x + direction * 22
+        arrow.center_y = shooter.center_y + 28
+        arrow.change_x = direction * getattr(shooter, 'projectile_speed', 7.0)
+        arrow.damage = getattr(shooter, 'arrow_damage', 1.0)
+        arrow.distance = 0.0
+        arrow.max_distance = 1400.0
+        self.projectile_list.append(arrow)
+
+    def _update_projectiles(self, delta_time: float) -> bool:
+        for arrow in list(self.projectile_list):
+            arrow.center_x += arrow.change_x
+            arrow.distance = getattr(arrow, 'distance', 0.0) + abs(arrow.change_x)
+            if arrow.distance >= getattr(arrow, 'max_distance', 1400.0) or arrow.right < 0 or arrow.left > self.width:
+                arrow.remove_from_sprite_lists()
+                continue
+            if arcade.check_for_collision_with_list(arrow, self.wall_list):
+                arrow.remove_from_sprite_lists()
+                continue
+            if arcade.check_for_collision(self.player, arrow):
+                if self.player_invuln <= 0:
+                    dmg = getattr(arrow, 'damage', 1.0)
+                    self.player_hp = max(0.0, self.player_hp - float(dmg))
+                    self.player_invuln = PLAYER_INVULN
+                    self.play_sfx('hurt', 1.0)
+                    push = 12 if arrow.change_x > 0 else -12
+                    self.player.center_x += push
+                    if self.player_hp <= 0.0:
+                        self.end_game('game_over')
+                        return True
+                arrow.remove_from_sprite_lists()
+        return False
+
     def on_draw(self):
         self.clear()
         # Tela de título (usa Text para performance)
@@ -645,6 +732,7 @@ class GameWindow(arcade.Window):
 
         self.wall_list.draw()
         self.enemy_list.draw()
+        self.projectile_list.draw()
         self.pickup_list.draw()
         self.player_list.draw()
         # Efeitos (slash, espada do baú)
@@ -784,7 +872,7 @@ class GameWindow(arcade.Window):
                     e.remove_from_sprite_lists()
                     continue
                 # animação de morte
-                if e.type in ("slime", "goblin", "troll", "orc", "skeleton"):
+                if e.type in ("slime", "goblin", "troll", "orc", "skeleton", "skeleton_archer"):
                     e.facing_right = e.change_x >= 0
                     idx = min(int(e.death_timer / 0.15), 2)
                     key = "die_right" if e.facing_right else "die_left"
@@ -796,6 +884,17 @@ class GameWindow(arcade.Window):
 
             # Vivo: movimento
             e.center_x += e.change_x
+            if e.type == "skeleton_archer":
+                current_cd = getattr(e, 'shoot_cooldown', 0.0)
+                current_cd = max(0.0, current_cd - delta_time)
+                e.shoot_cooldown = current_cd
+                direction = 1 if e.facing_right else -1
+                player_dx = self.player.center_x - e.center_x
+                horizontal = (player_dx * direction) > 0 and abs(player_dx) < self.width * 0.7
+                vertical = abs(self.player.center_y - (e.center_y + 24)) < 120
+                if horizontal and vertical and current_cd <= 0.0:
+                    self.spawn_archer_arrow(e, direction)
+                    e.shoot_cooldown = getattr(e, 'shoot_interval', 3.0)
             if e.type == "bat":
                 # Patrulha em onda + mergulho controlado (sem perseguir no solo)
                 prev_y = e.center_y
@@ -855,8 +954,8 @@ class GameWindow(arcade.Window):
                 e.hurt_timer -= delta_time
                 if e.anim_timer > 0.12:
                     e.anim_timer = 0
-                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "troll", "orc", "skeleton") else 4)
-                if e.type in ("slime", "goblin", "troll", "orc", "skeleton"):
+                    e.anim_index = (e.anim_index + 1) % (2 if e.type in ("slime", "goblin", "troll", "orc", "skeleton", "skeleton_archer") else 4)
+                if e.type in ("slime", "goblin", "troll", "orc", "skeleton", "skeleton_archer"):
                     key = "hurt_right" if e.facing_right else "hurt_left"
                 else:
                     key = "fly_right" if e.facing_right else "fly_left"
@@ -864,7 +963,7 @@ class GameWindow(arcade.Window):
                 if e.anim_timer > 0.18:
                     e.anim_timer = 0
                     e.anim_index = (e.anim_index + 1) % 4
-                if e.type in ("slime", "goblin", "troll", "orc", "skeleton"):
+                if e.type in ("slime", "goblin", "troll", "orc", "skeleton", "skeleton_archer"):
                     key = "walk_right" if e.facing_right else "walk_left"
                 else:  # bat
                     key = "fly_right" if e.facing_right else "fly_left"
@@ -883,6 +982,9 @@ class GameWindow(arcade.Window):
             if self.player_hp <= 0.0:
                     self.end_game('game_over')
                     return
+
+        if self._update_projectiles(delta_time):
+            return
 
         # Vitória: todos os inimigos foram derrotados
         if self.state == 'playing' and len(self.enemy_list) == 0:
