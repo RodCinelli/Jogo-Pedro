@@ -26,7 +26,7 @@ Bem-vindo ao Warrior Platform, um platformer 2D com combate simples, IA variada 
 
 ## Visão Geral
 - Objetivo: derrotar todos os inimigos antes que o tempo acabe, preservando sua vida. Colete corações e pegue a Super Espada para dobrar seu dano.
-- Mundo: terreno com plataformas centrais e escadarias, spawns de inimigos no chão e andares, e um baú no topo com upgrade de espada. O trecho final agora possui duas plataformas nevadas: uma dupla estreita (quinta plataforma) guardada por Skeleton Archers fixos com visão de flechas e uma arena larga (sexta plataforma) onde enfrentamos os Skeleton Warriors.
+- Mundo: terreno com plataformas centrais e escadarias, spawns de inimigos no chão e andares, e um baú no topo com upgrade de espada. O trecho final agora possui duas plataformas nevadas: uma dupla ampliada (quinta plataforma) guardada por Skeleton Archers fixos posicionados nas extremidades internas e uma arena larga (sexta plataforma) onde enfrentamos os Skeleton Warriors.
 - Plataformas tematizadas: o andar dos goblins recebe um matiz esverdeado (heras), o dos trolls fica alaranjado (vegetação árida) e o dos orcs ganha manchas vermelhas lembrando sangue; acima deles a escadaria nevada conduz ao topo.
 - Estilo: pixels gerados por código (sprites), clima dinâmico e efeitos simples que deixam a tela viva e legível.
 
@@ -121,7 +121,8 @@ Todos os inimigos dão +100 pontos ao morrer e podem derrubar coração (25%).
   - HP: 3
   - Dano de contato: 1.0
   - Velocidade: 0.0 (mantém posição)
-  - Padrão: permanece estático nas extremidades da quinta plataforma nevada e dispara flechas a cada 3s quando o jogador entra em sua linha de visão horizontal.
+  - Padrão: permanece estático nas extremidades da quinta plataforma nevada (offset calculado em `game.py:356`) e dispara flechas a cada 3s quando o jogador entra em sua linha de visão horizontal.
+  - Flechas: lançadas a partir do arco (altura `center_y + 2`, ver `game.py:659`) usando texturas marrons (`assets/sprites.py:965`).
 - Bat
   - HP: 2
   - Dano de contato: 1.0

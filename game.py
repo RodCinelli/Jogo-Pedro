@@ -656,7 +656,7 @@ class GameWindow(arcade.Window):
         tex_key = "right" if direction >= 0 else "left"
         arrow.texture = textures[tex_key]
         arrow.center_x = shooter.center_x + direction * 22
-        arrow.center_y = shooter.center_y + 8
+        arrow.center_y = shooter.center_y + 2
         arrow.change_x = direction * getattr(shooter, 'projectile_speed', 7.0)
         arrow.damage = getattr(shooter, 'arrow_damage', 1.0)
         arrow.distance = 0.0
